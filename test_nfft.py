@@ -78,10 +78,19 @@ class TestNfft(unittest.TestCase):
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
             
     def test_nfftn_2d(self):
-        pass
+        a = numpy.random.random((self._size, )*2)
+        ft_nfft = nfft.nfftn(a, [[self._coord_1d[self._2d_coord[0][0]], self._coord_1d[self._2d_coord[0][1]]],
+                                 [self._coord_1d[self._2d_coord[1][0]], self._coord_1d[self._2d_coord[1][1]]]])
+        ft_fftw = numpy.fft.fftshift(numpy.fft.fft2(numpy.fft.fftshift(a)))
+        numpy.testing.assert_almost_equal(ft_nfft, ft_fftw[(self._2d_coord[0][0], self._2d_coord[1][0]), (self._2d_coord[0][1], self._2d_coord[1][1])])
 
     def test_nfftn_inplace_2d(self):
-        pass
+        a = numpy.random.random((self._size, )*2)
+        ft_nfft = numpy.empty(2, dtype="complex128")
+        nfft.nfftn_inplace(a, [[self._coord_1d[self._2d_coord[0][0]], self._coord_1d[self._2d_coord[0][1]]],
+                               [self._coord_1d[self._2d_coord[1][0]], self._coord_1d[self._2d_coord[1][1]]]], ft_nfft)
+        ft_fftw = numpy.fft.fftshift(numpy.fft.fft2(numpy.fft.fftshift(a)))
+        numpy.testing.assert_almost_equal(ft_nfft, ft_fftw[(self._2d_coord[0][0], self._2d_coord[1][0]), (self._2d_coord[0][1], self._2d_coord[1][1])])
 
     def test_failures(self):
         a = numpy.random.random(self._size)
