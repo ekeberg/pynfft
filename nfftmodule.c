@@ -7,16 +7,6 @@
 
 //#include "nfftclassmodule.h"
 
-static PyObject *foo(PyObject *self, PyObject *args)
-{
-  PyObject *in_obj;
-  if (!PyArg_ParseTuple(args, "O", &in_obj))
-    return NULL;
-  PyObject *in_array = PyArray_FROM_OTF(in_obj, NPY_DOUBLE, NPY_IN_ARRAY);
-  Py_XDECREF(in_array);
-  return Py_BuildValue("i", 1);
-}
-
 static void nfft_1d_carrays(double *in, double *coord, double *out, int number_of_pixels, int number_of_points)
 {
   nfft_plan my_plan;
@@ -573,8 +563,8 @@ static PyMemberDef Transformer_members[] = {
 };
 
 static PyMethodDef Transformer_methods[] = {
-  {"ndim", (PyCFunction) ndim, METH_VARARGS, "Get the number of dimensions."},
-  {"transform", (PyCFunction) Transformer_transform, METH_VARARGS, "Returns transformation at given coordintase. Coordinate array has format [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS]"},
+  {"ndim", (PyCFunction) ndim, METH_VARARGS, "ndim()\n\nGet the number of dimensions."},
+  {"transform", (PyCFunction) Transformer_transform, METH_VARARGS, "transform(coordinates)\n\nReturns transformation at given coordintase.\n\nCoordinate array has format [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] and can be of any type that can direcly be converted to an ndarray."},
   {NULL}
 };
 
@@ -600,7 +590,7 @@ static PyTypeObject TransformerType = {
    0,                         /* tp_setattro */
    0,                         /* tp_as_buffer */
    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags*/
-   "Transformer object",  /* tp_doc */
+   "Transformer(real_space)\n\nCreates an object that can be used to calculate multiple nfft transforms from the same array.",  /* tp_doc */
    0,                         /* tp_traverse */
    0,                         /* tp_clear */
    0,                         /* tp_richcompare */
@@ -621,13 +611,12 @@ static PyTypeObject TransformerType = {
 };
 
 static PyMethodDef NfftMethods[] = {
-  {"nfft", nfft, METH_VARARGS, "1d nfft."},
-  {"nfft_inplace", nfft_inplace, METH_VARARGS, "1d nfft."},
-  {"nfft3", nfft3, METH_VARARGS, "3d nfft."},
-  {"nfft3_inplace", nfft3_inplace, METH_VARARGS, "3d nfft."},
-  {"nfftn", nfftn, METH_VARARGS, "n dimensional nfft."},
-  {"nfftn_inplace", nfftn_inplace , METH_VARARGS, "n dimensional nfft."},
-  {"foo", foo, METH_VARARGS, "Debug stuff"},
+  {"nfft", nfft, METH_VARARGS, "nfft(real_space, coordinates)\n\nCalculate 1d nfft.\n\real_space should be 1d array.\ncoordinates should be a 1d array of the coordinates where the Fourier transform should be evaluated."},
+  {"nfft_inplace", nfft_inplace, METH_VARARGS, "nfft_inplace(real_space, coordinates, output_array)\n\nCalculate 1d nfft.\n\real space should be 1d array.\ncoordinates should be a 1d array of the coordinates where the Fourier transform should be evaluated\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation."},
+  {"nfft3", nfft3, METH_VARARGS, "nfft3(real_space, coordinates)\n\nCalculate 3d nfft.\n\real_space should be 3d array.\ncoordinates should be a Nx3 array where N is the number of points where the Fourier transform should be evaluated."},
+  {"nfft3_inplace", nfft3_inplace, METH_VARARGS, "nfft3(real_space, coordinates)\n\nCalculate 3d nfft.\n\real_space should be 3d array.\ncoordinates should be a Nx3 array where N is the number of points where the Fourier transform should be evaluated\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation."},
+  {"nfftn", nfftn, METH_VARARGS, "nfft3(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array"},
+  {"nfftn_inplace", nfftn_inplace , METH_VARARGS, "nfft3(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation."},
   {NULL, NULL, 0, NULL}
 };
 
