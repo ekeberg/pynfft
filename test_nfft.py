@@ -25,24 +25,24 @@ class TestNfft(unittest.TestCase):
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft2(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw[(self._2d_coord[0][0], self._2d_coord[1][0]), (self._2d_coord[0][1], self._2d_coord[1][1])])
 
-    def test_nfft(self):
+    def test_nfft1(self):
         a = numpy.random.random(self._size)
-        ft_nfft = nfft.nfft(a, self._coord_1d)
+        ft_nfft = nfft.nfft1(a, self._coord_1d)
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
 
-    def test_nfft_inplace(self):
+    def test_nfft1_inplace(self):
         a = numpy.random.random(self._size)
         ft_nfft = numpy.empty(self._size, dtype="complex128")
-        nfft.nfft_inplace(a, self._coord_1d, ft_nfft)
+        nfft.nfft1_inplace(a, self._coord_1d, ft_nfft)
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
 
-    def test_nfft_inplace_subarray(self):
+    def test_nfft1_inplace_subarray(self):
         a = numpy.random.random(self._size)
         ft_nfft_large = numpy.zeros(self._size*2, dtype="complex128")
         ft_nfft = ft_nfft_large[::2]
-        nfft.nfft_inplace(a, self._coord_1d, ft_nfft)
+        nfft.nfft1_inplace(a, self._coord_1d, ft_nfft)
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
 
@@ -64,31 +64,31 @@ class TestNfft(unittest.TestCase):
                                                            (self._3d_coord[0][1], self._3d_coord[1][1]),
                                                            (self._3d_coord[0][2], self._3d_coord[1][2])])
         
-    def test_nfftn_1d(self):
+    def test_nfft_1d(self):
         a = numpy.random.random(self._size)
-        ft_nfft = nfft.nfftn(a, self._coord_1d)
+        ft_nfft = nfft.nfft(a, self._coord_1d)
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
 
-    def test_nfftn_inplace_1d(self):
+    def test_nfft_inplace_1d(self):
         a = numpy.random.random(self._size)
         ft_nfft = numpy.empty(self._size, dtype="complex128")
-        nfft.nfftn_inplace(a, self._coord_1d, ft_nfft)
+        nfft.nfft_inplace(a, self._coord_1d, ft_nfft)
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
             
-    def test_nfftn_2d(self):
+    def test_nfft_2d(self):
         a = numpy.random.random((self._size, )*2)
-        ft_nfft = nfft.nfftn(a, [[self._coord_1d[self._2d_coord[0][0]], self._coord_1d[self._2d_coord[0][1]]],
-                                 [self._coord_1d[self._2d_coord[1][0]], self._coord_1d[self._2d_coord[1][1]]]])
+        ft_nfft = nfft.nfft(a, [[self._coord_1d[self._2d_coord[0][0]], self._coord_1d[self._2d_coord[0][1]]],
+                                [self._coord_1d[self._2d_coord[1][0]], self._coord_1d[self._2d_coord[1][1]]]])
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft2(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw[(self._2d_coord[0][0], self._2d_coord[1][0]), (self._2d_coord[0][1], self._2d_coord[1][1])])
 
-    def test_nfftn_inplace_2d(self):
+    def test_nfft_inplace_2d(self):
         a = numpy.random.random((self._size, )*2)
         ft_nfft = numpy.empty(2, dtype="complex128")
-        nfft.nfftn_inplace(a, [[self._coord_1d[self._2d_coord[0][0]], self._coord_1d[self._2d_coord[0][1]]],
-                               [self._coord_1d[self._2d_coord[1][0]], self._coord_1d[self._2d_coord[1][1]]]], ft_nfft)
+        nfft.nfft_inplace(a, [[self._coord_1d[self._2d_coord[0][0]], self._coord_1d[self._2d_coord[0][1]]],
+                              [self._coord_1d[self._2d_coord[1][0]], self._coord_1d[self._2d_coord[1][1]]]], ft_nfft)
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft2(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw[(self._2d_coord[0][0], self._2d_coord[1][0]), (self._2d_coord[0][1], self._2d_coord[1][1])])
 

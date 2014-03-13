@@ -46,8 +46,8 @@ static void nfft_3d_carrays(double *in, double *coord, double *out, int number_o
   nfft_finalize(&my_plan);
 }
 
-PyDoc_STRVAR(nfft__doc__, "nfft(real_space, coordinates)\n\nCalculate 1d nfft.\n\real_space should be 1d array.\ncoordinates should be a 1d array of the coordinates where the Fourier transform should be evaluated.");
-static PyObject *nfft(PyObject *self, PyObject *args)
+PyDoc_STRVAR(nfft1__doc__, "nfft1(real_space, coordinates)\n\nCalculate 1d nfft.\n\real_space should be 1d array.\ncoordinates should be a 1d array of the coordinates where the Fourier transform should be evaluated.");
+static PyObject *nfft1(PyObject *self, PyObject *args)
 {
   PyObject *vecin_obj, *veccoord_obj;
   double *cin, *cout, *ccoord;
@@ -89,8 +89,8 @@ static PyObject *nfft(PyObject *self, PyObject *args)
   return vecout_array;
 }
 
-PyDoc_STRVAR(nfft_inplace__doc__, "nfft_inplace(real_space, coordinates, output_array)\n\nCalculate 1d nfft.\n\nParameters\n----------\nreal space : array_like\n    Should be 1d array.\ncoordinates : array_like\n    Should be a 1d array of the coordinates where the Fourier transform should be evaluated\noutput_array : array_like\n    The is written to here, if the array is a continuous block in memory this can speed up the calculation. Should be ndarray of type complex128.");
-static PyObject *nfft_inplace(PyObject *self, PyObject *args)
+PyDoc_STRVAR(nfft1_inplace__doc__, "nfft1_inplace(real_space, coordinates, output_array)\n\nCalculate 1d nfft.\n\nParameters\n----------\nreal space : array_like\n    Should be 1d array.\ncoordinates : array_like\n    Should be a 1d array of the coordinates where the Fourier transform should be evaluated\noutput_array : array_like\n    The is written to here, if the array is a continuous block in memory this can speed up the calculation. Should be ndarray of type complex128.");
+static PyObject *nfft1_inplace(PyObject *self, PyObject *args)
 {
   PyObject *in_obj, *out_obj, *coord_obj;
   double *cin, *cout, *ccoord;
@@ -269,8 +269,8 @@ static PyObject *nfft3_inplace(PyObject *self, PyObject *args)
   return Py_BuildValue("i", 1);
 }
 
-PyDoc_STRVAR(nfftn__doc__, "nfft3(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\n\nupdated");
-static PyObject *nfftn(PyObject *self, PyObject *args)
+PyDoc_STRVAR(nfft__doc__, "nfft(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array");
+static PyObject *nfft(PyObject *self, PyObject *args)
 {
   PyObject *in_obj, *coord_obj;
 
@@ -345,8 +345,8 @@ static PyObject *nfftn(PyObject *self, PyObject *args)
   return out_array;
 }
 
-PyDoc_STRVAR(nfftn_inplace__doc__, "nfft3(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.");
-static PyObject *nfftn_inplace(PyObject *self, PyObject *args)
+PyDoc_STRVAR(nfft_inplace__doc__, "nfft_inplace(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.");
+static PyObject *nfft_inplace(PyObject *self, PyObject *args)
 {
   PyObject *in_obj, *coord_obj, *out_obj;
 
@@ -635,12 +635,12 @@ static PyTypeObject TransformerType = {
 };
 
 static PyMethodDef NfftMethods[] = {
-  {"nfft", nfft, METH_VARARGS, nfft__doc__},
-  {"nfft_inplace", nfft_inplace, METH_VARARGS, nfft_inplace__doc__},
+  {"nfft1", nfft1, METH_VARARGS, nfft1__doc__},
+  {"nfft1_inplace", nfft1_inplace, METH_VARARGS, nfft1_inplace__doc__},
   {"nfft3", nfft3, METH_VARARGS, nfft3__doc__},
   {"nfft3_inplace", nfft3_inplace, METH_VARARGS, nfft3_inplace__doc__},
-  {"nfftn", nfftn, METH_VARARGS, nfftn__doc__},
-  {"nfftn_inplace", nfftn_inplace , METH_VARARGS, nfftn_inplace__doc__},
+  {"nfft", nfft, METH_VARARGS, nfft__doc__},
+  {"nfft_inplace", nfft_inplace , METH_VARARGS, nfft_inplace__doc__},
   {NULL, NULL, 0, NULL}
 };
 
