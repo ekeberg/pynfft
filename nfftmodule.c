@@ -7,268 +7,6 @@
 
 //#include "nfftclassmodule.h"
 
-static void nfft_1d_carrays(double *in, double *coord, double *out, int number_of_pixels, int number_of_points)
-{
-  nfft_plan my_plan;
-  nfft_init_1d(&my_plan, number_of_pixels, number_of_points);
-
-  memcpy(my_plan.x, coord, number_of_points*sizeof(double));
-  //my_plan.x = coord
-  memcpy(my_plan.f_hat, in, 2*number_of_pixels*sizeof(double));
-
-  if (my_plan.nfft_flags &PRE_PSI) {
-    nfft_precompute_one_psi(&my_plan);
-  }
-  
-  nfft_trafo(&my_plan);
-
-  memcpy(out, my_plan.f, 2*number_of_points*sizeof(double));
-
-  nfft_finalize(&my_plan);
-}
-
-static void nfft_3d_carrays(double *in, double *coord, double *out, int number_of_pixels_x,
-			    int number_of_pixels_y, int number_of_pixels_z, int number_of_points)
-{
-  nfft_plan my_plan;
-  nfft_init_3d(&my_plan, number_of_pixels_z, number_of_pixels_y, number_of_pixels_x, number_of_points);
-
-  memcpy(my_plan.x, coord, 3*number_of_points*sizeof(double));
-  memcpy(my_plan.f_hat, in, 2*number_of_pixels_x*number_of_pixels_y*number_of_pixels_z*sizeof(double));
-
-  if (my_plan.nfft_flags &PRE_PSI) {
-    nfft_precompute_one_psi(&my_plan);
-  }
-  
-  nfft_trafo(&my_plan);
-  memcpy(out, my_plan.f, 2*number_of_points*sizeof(double));
-
-  nfft_finalize(&my_plan);
-}
-
-PyDoc_STRVAR(nfft1__doc__, "nfft1(real_space, coordinates)\n\nCalculate 1d nfft.\n\real_space should be 1d array.\ncoordinates should be a 1d array of the coordinates where the Fourier transform should be evaluated.");
-static PyObject *nfft1(PyObject *self, PyObject *args)
-{
-  PyObject *vecin_obj, *veccoord_obj;
-  double *cin, *cout, *ccoord;
-
-  int number_of_pixels, number_of_points;
-
-  if (!PyArg_ParseTuple(args, "OO", &vecin_obj, &veccoord_obj)) {
-    return NULL;
-  }
-
-  PyObject *veccoord_array = PyArray_FROM_OTF(veccoord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
-  PyObject *vecin_array = PyArray_FROM_OTF(vecin_obj, NPY_COMPLEX128, NPY_IN_ARRAY);
-  if (veccoord_array == NULL || vecin_array == NULL) {
-    Py_XDECREF(veccoord_array);
-    Py_XDECREF(vecin_array);
-    return NULL;
-  }
-
-  if (PyArray_NDIM(veccoord_array) != 1 || PyArray_NDIM(vecin_array) != 1) {
-    PyErr_SetString(PyExc_ValueError, "Input must all be 1D arrays.");
-    Py_XDECREF(veccoord_array);
-    Py_XDECREF(vecin_array);
-    return NULL;
-  }
-  number_of_pixels = (int)PyArray_DIM(vecin_array, 0);
-  number_of_points = (int)PyArray_DIM(veccoord_array, 0);
-
-  int vecout_dims[] = {number_of_points};
-  PyObject *vecout_array = PyArray_FromDims(1, vecout_dims, NPY_COMPLEX128);
-
-  ccoord = (double *)PyArray_DATA(veccoord_array);
-  cin = (double *)PyArray_DATA(vecin_array);
-  cout = (double *)PyArray_DATA(vecout_array);
-
-  nfft_1d_carrays(cin, ccoord, cout, number_of_pixels, number_of_points);
-  
-  Py_XDECREF(veccoord_array);
-  Py_XDECREF(vecin_array);
-  return vecout_array;
-}
-
-PyDoc_STRVAR(nfft1_inplace__doc__, "nfft1_inplace(real_space, coordinates, output_array)\n\nCalculate 1d nfft.\n\nParameters\n----------\nreal space : array_like\n    Should be 1d array.\ncoordinates : array_like\n    Should be a 1d array of the coordinates where the Fourier transform should be evaluated\noutput_array : array_like\n    The is written to here, if the array is a continuous block in memory this can speed up the calculation. Should be ndarray of type complex128.");
-static PyObject *nfft1_inplace(PyObject *self, PyObject *args)
-{
-  PyObject *in_obj, *out_obj, *coord_obj;
-  double *cin, *cout, *ccoord;
-
-  int number_of_pixels, number_of_points;
-
-  if (!PyArg_ParseTuple(args, "OOO", &in_obj, &coord_obj, &out_obj)) {
-    return NULL;
-  }
-
-  PyObject *coord_array = PyArray_FROM_OTF(coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
-  PyObject *in_array = PyArray_FROM_OTF(in_obj, NPY_COMPLEX128, NPY_IN_ARRAY);
-
-  if (!PyArray_Check(out_obj)) {
-    PyErr_SetString(PyExc_ValueError, "Output must be numpy.array of dtype complex128");
-    return NULL;
-  }
-
-  if (PyArray_DESCR(out_obj)->type_num != NPY_COMPLEX128) {
-    PyErr_SetString(PyExc_ValueError, "Output array must be of type complex128");
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    return NULL;
-  }
-  PyObject *out_array = PyArray_FROM_OTF(out_obj, NPY_COMPLEX128, NPY_INOUT_ARRAY);
-
-  if (coord_array == NULL || in_array == NULL || out_array == NULL)
-    goto fail;
-  
-  if (PyArray_NDIM(coord_array) != 1 || PyArray_NDIM(in_array) != 1 || PyArray_NDIM(out_array) != 1) {
-    PyErr_SetString(PyExc_ValueError, "Input must all be 1D arrays.");
-    goto fail;
-  }
-  number_of_pixels = (int)PyArray_DIM(in_array, 0);
-  number_of_points = (int)PyArray_DIM(out_array, 0);
-  ccoord = (double *)PyArray_DATA(coord_array);
-  cin = (double *)PyArray_DATA(in_array);
-  cout = (double *)PyArray_DATA(out_array);
-  if ((int)PyArray_DIM(coord_array, 0) != number_of_points) {
-    PyErr_SetString(PyExc_ValueError, "Coordinates and output must be the same length.");
-    goto fail;
-  }
-
-  nfft_1d_carrays(cin, ccoord, cout, number_of_pixels, number_of_points);
-
-  Py_XDECREF(coord_array);
-  Py_XDECREF(in_array);
-  Py_XDECREF(out_array);
-  return Py_BuildValue("i", 1);
-
- fail:
-  Py_XDECREF(coord_array);
-  Py_XDECREF(in_array);
-  Py_XDECREF(out_array);
-  return NULL;
-}
-
-PyDoc_STRVAR(nfft3__doc__, "nfft3(real_space, coordinates)\n\nCalculate 3d nfft.\n\real_space should be 3d array.\ncoordinates should be a Nx3 array where N is the number of points where the Fourier transform should be evaluated.");
-static PyObject *nfft3(PyObject *self, PyObject *args)
-{
-  PyObject *in_obj, *coord_obj;
-  double *cin, *cout, *ccoord;
-
-  if (!PyArg_ParseTuple(args, "OO", &in_obj, &coord_obj)) {
-    return NULL;
-  }
-
-  PyObject *coord_array = PyArray_FROM_OTF(coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
-  PyObject *in_array = PyArray_FROM_OTF(in_obj, NPY_COMPLEX128, NPY_IN_ARRAY);
-  if (coord_array == NULL || in_array == NULL) {
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    return NULL;
-  }
-
-  if (PyArray_NDIM(coord_array) != 2 || PyArray_DIM(coord_array, 1) != 3) {
-    PyErr_SetString(PyExc_ValueError, "Coordinate array must be size Nx3");
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    return NULL;
-  }
-
-  if (PyArray_NDIM(in_array) != 3) {
-    PyErr_SetString(PyExc_ValueError, "Input must be a 3D array.");
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    return NULL;
-  }
-
-  int number_of_pixels_z = (int)PyArray_DIM(in_array, 0);
-  int number_of_pixels_y = (int)PyArray_DIM(in_array, 1);
-  int number_of_pixels_x = (int)PyArray_DIM(in_array, 2);
-  int number_of_points = (int)PyArray_DIM(coord_array, 0);
-
-  int out_dims[] = {number_of_points};
-  PyObject *out_array = PyArray_FromDims(1, out_dims, NPY_COMPLEX128);
-
-  ccoord = (double *)PyArray_DATA(coord_array);
-  cin = (double *)PyArray_DATA(in_array);
-  cout = (double *)PyArray_DATA(out_array);
-
-  nfft_3d_carrays(cin, ccoord, cout, number_of_pixels_x, number_of_pixels_y, number_of_pixels_z, number_of_points);
-
-  Py_XDECREF(coord_array);
-  Py_XDECREF(in_array);
-  return out_array;
-}
-
-PyDoc_STRVAR(nfft3_inplace__doc__, "nfft3(real_space, coordinates)\n\nCalculate 3d nfft.\n\real_space should be 3d array.\ncoordinates should be a Nx3 array where N is the number of points where the Fourier transform should be evaluated\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.");
-static PyObject *nfft3_inplace(PyObject *self, PyObject *args)
-{
-  PyObject *in_obj, *coord_obj, *out_obj;
-  double *cin, *cout, *ccoord;
-
-  if (!PyArg_ParseTuple(args, "OOO", &in_obj, &coord_obj, &out_obj)) {
-    return NULL;
-  }
-
-  PyObject *coord_array = PyArray_FROM_OTF(coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
-  PyObject *in_array = PyArray_FROM_OTF(in_obj, NPY_COMPLEX128, NPY_IN_ARRAY);
-  if (coord_array == NULL || in_array == NULL) {
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    return NULL;
-  }
-
-  if (PyArray_NDIM(coord_array) != 2 || PyArray_DIM(coord_array, 1) != 3) {
-    PyErr_SetString(PyExc_ValueError, "Coordinate array must be size Nx3");
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    return NULL;
-  }
-
-  if (PyArray_NDIM(in_array) != 3) {
-    PyErr_SetString(PyExc_ValueError, "Input must be a 3D array.");
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    return NULL;
-  }
-
-  int number_of_pixels_z = (int)PyArray_DIM(in_array, 0);
-  int number_of_pixels_y = (int)PyArray_DIM(in_array, 1);
-  int number_of_pixels_x = (int)PyArray_DIM(in_array, 2);
-  int number_of_points = (int)PyArray_DIM(coord_array, 0);
-
-  if (!PyArray_Check(out_obj)) {
-    PyErr_SetString(PyExc_ValueError, "Output must be numpy.array of dtype complex128");
-    return NULL;
-  }
-
-  if (PyArray_DESCR(out_obj)->type_num != NPY_COMPLEX128) {
-    PyErr_SetString(PyExc_ValueError, "Output array must be of dtype complex128");
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    return NULL;
-  }
-  PyObject *out_array = PyArray_FROM_OTF(out_obj, NPY_COMPLEX128, NPY_INOUT_ARRAY);
-
-  if (PyArray_NDIM(out_array) != 1 || PyArray_DIM(out_array, 0) != number_of_points) {
-    PyErr_SetString(PyExc_ValueError, "Output array must be one dimensional and same length as coordinates array.");
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
-    Py_XDECREF(out_array);
-    return NULL;
-  }
-
-  ccoord = (double *)PyArray_DATA(coord_array);
-  cin = (double *)PyArray_DATA(in_array);
-  cout = (double *)PyArray_DATA(out_array);
-
-  nfft_3d_carrays(cin, ccoord, cout, number_of_pixels_x, number_of_pixels_y, number_of_pixels_z, number_of_points);
-
-  Py_XDECREF(coord_array);
-  Py_XDECREF(in_array);
-  Py_XDECREF(out_array);
-  return Py_BuildValue("i", 1);
-}
-
 PyDoc_STRVAR(nfft__doc__, "nfft(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array");
 static PyObject *nfft(PyObject *self, PyObject *args)
 {
@@ -486,6 +224,11 @@ typedef struct {
   int ndim;
 }Transformer;
 
+static PyMemberDef Transformer_members[] = {
+  {"real_map", T_OBJECT_EX, offsetof(Transformer, real_map), 0, "Real space map."},
+  {NULL}
+};
+
 static int Transformer_init(Transformer *self, PyObject *args, PyObject *kwds)
 {
   PyObject *input_obj;
@@ -581,11 +324,6 @@ static PyObject *Transformer_ndim(Transformer *self, PyObject *args, PyObject *k
   }
 }
 
-static PyMemberDef Transformer_members[] = {
-  {"real_map", T_OBJECT_EX, offsetof(Transformer, real_map), 0, "Real space map."},
-  {NULL}
-};
-
 static PyMethodDef Transformer_methods[] = {
   {"ndim", (PyCFunction) Transformer_ndim, METH_VARARGS, Transformer_ndim__doc__},
   {"transform", (PyCFunction) Transformer_transform, METH_VARARGS, Transformer_transform__doc__},
@@ -635,10 +373,6 @@ static PyTypeObject TransformerType = {
 };
 
 static PyMethodDef NfftMethods[] = {
-  {"nfft1", nfft1, METH_VARARGS, nfft1__doc__},
-  {"nfft1_inplace", nfft1_inplace, METH_VARARGS, nfft1_inplace__doc__},
-  {"nfft3", nfft3, METH_VARARGS, nfft3__doc__},
-  {"nfft3_inplace", nfft3_inplace, METH_VARARGS, nfft3_inplace__doc__},
   {"nfft", nfft, METH_VARARGS, nfft__doc__},
   {"nfft_inplace", nfft_inplace , METH_VARARGS, nfft_inplace__doc__},
   {NULL, NULL, 0, NULL}
