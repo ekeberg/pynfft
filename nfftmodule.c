@@ -7,13 +7,26 @@
 
 //#include "nfftclassmodule.h"
 
-PyDoc_STRVAR(nfft__doc__, "nfft(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array");
-static PyObject *nfft(PyObject *self, PyObject *args)
+PyDoc_STRVAR(nfft__doc__, "nfft(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\ndirect (optional) requires the use of the more accurate but slower ndft (default is False)");
+static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
 {
   PyObject *in_obj, *coord_obj;
-
+  PyObject *use_direct_obj = NULL;
+  
+  /*
   if (!PyArg_ParseTuple(args, "OO", &in_obj, &coord_obj)) {
     return NULL;
+  }
+  */
+  static char *kwlist[] = {"real_space", "coordinates", "direct", NULL};
+  //static char *kwlist[] = {"direct", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|O", kwlist, &in_obj, &coord_obj, &use_direct_obj)) {
+  //if (!PyArg_ParseTuple(args, "OO|O", &in_obj, &coord_obj, &use_direct_obj)) {
+    return NULL;
+  }
+  int use_direct = 0;
+  if (use_direct_obj != NULL && PyObject_IsTrue(use_direct_obj)) {
+    use_direct = 1;
   }
 
   PyObject *coord_array = PyArray_FROM_OTF(coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
@@ -70,7 +83,11 @@ static PyObject *nfft(PyObject *self, PyObject *args)
     nfft_precompute_one_psi(&my_plan);
   }
 
-  nfft_trafo(&my_plan);
+  if (use_direct == 1) {
+    nfft_trafo_direct(&my_plan);
+  } else {
+    nfft_trafo(&my_plan);
+  }
   
   //npy_intp out_dim[] = {number_of_points};
   int out_dim[] = {number_of_points};
@@ -83,13 +100,20 @@ static PyObject *nfft(PyObject *self, PyObject *args)
   return out_array;
 }
 
-PyDoc_STRVAR(nfft_inplace__doc__, "nfft_inplace(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.");
-static PyObject *nfft_inplace(PyObject *self, PyObject *args)
+PyDoc_STRVAR(nfft_inplace__doc__, "nfft_inplace(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.\ndirect (optional) requires the use of the more accurate but slower ndft (default is False).");
+static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
 {
   PyObject *in_obj, *coord_obj, *out_obj;
+  PyObject *use_direct_obj = NULL;
 
-  if (!PyArg_ParseTuple(args, "OOO", &in_obj, &coord_obj, &out_obj)) {
+  static char *kwlist[] = {"real_space", "coordinates", "output", "direct", NULL};
+  //if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|O", kwlist, &in_obj, &coord_obj, &use_direct_obj)) {
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOO|O", kwlist, &in_obj, &coord_obj, &out_obj, &use_direct_obj)) {
     return NULL;
+  }
+  int use_direct = 0;
+  if (use_direct_obj != NULL && PyObject_IsTrue(use_direct_obj)) {
+    use_direct = 1;
   }
 
   PyObject *coord_array = PyArray_FROM_OTF(coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
@@ -152,8 +176,11 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args)
     nfft_precompute_one_psi(&my_plan);
   }
 
-  nfft_trafo(&my_plan);
-  
+  if (use_direct == 1) {
+    nfft_trafo_direct(&my_plan);
+  } else {
+    nfft_trafo(&my_plan);
+  }
   memcpy(PyArray_DATA(out_array), my_plan.f, number_of_points*sizeof(fftw_complex));
 
   nfft_finalize(&my_plan);
@@ -373,8 +400,8 @@ static PyTypeObject TransformerType = {
 };
 
 static PyMethodDef NfftMethods[] = {
-  {"nfft", nfft, METH_VARARGS, nfft__doc__},
-  {"nfft_inplace", nfft_inplace , METH_VARARGS, nfft_inplace__doc__},
+  {"nfft", (PyCFunction)nfft, METH_VARARGS|METH_KEYWORDS, nfft__doc__},
+  {"nfft_inplace", (PyCFunction)nfft_inplace , METH_VARARGS|METH_KEYWORDS, nfft_inplace__doc__},
   {NULL, NULL, 0, NULL}
 };
 
