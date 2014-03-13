@@ -46,6 +46,7 @@ static void nfft_3d_carrays(double *in, double *coord, double *out, int number_o
   nfft_finalize(&my_plan);
 }
 
+PyDoc_STRVAR(nfft__doc__, "nfft(real_space, coordinates)\n\nCalculate 1d nfft.\n\real_space should be 1d array.\ncoordinates should be a 1d array of the coordinates where the Fourier transform should be evaluated.");
 static PyObject *nfft(PyObject *self, PyObject *args)
 {
   PyObject *vecin_obj, *veccoord_obj;
@@ -88,6 +89,7 @@ static PyObject *nfft(PyObject *self, PyObject *args)
   return vecout_array;
 }
 
+PyDoc_STRVAR(nfft_inplace__doc__, "nfft_inplace(real_space, coordinates, output_array)\n\nCalculate 1d nfft.\n\nParameters\n----------\nreal space : array_like\n    Should be 1d array.\ncoordinates : array_like\n    Should be a 1d array of the coordinates where the Fourier transform should be evaluated\noutput_array : array_like\n    The is written to here, if the array is a continuous block in memory this can speed up the calculation. Should be ndarray of type complex128.");
 static PyObject *nfft_inplace(PyObject *self, PyObject *args)
 {
   PyObject *in_obj, *out_obj, *coord_obj;
@@ -146,6 +148,7 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args)
   return NULL;
 }
 
+PyDoc_STRVAR(nfft3__doc__, "nfft3(real_space, coordinates)\n\nCalculate 3d nfft.\n\real_space should be 3d array.\ncoordinates should be a Nx3 array where N is the number of points where the Fourier transform should be evaluated.");
 static PyObject *nfft3(PyObject *self, PyObject *args)
 {
   PyObject *in_obj, *coord_obj;
@@ -196,6 +199,7 @@ static PyObject *nfft3(PyObject *self, PyObject *args)
   return out_array;
 }
 
+PyDoc_STRVAR(nfft3_inplace__doc__, "nfft3(real_space, coordinates)\n\nCalculate 3d nfft.\n\real_space should be 3d array.\ncoordinates should be a Nx3 array where N is the number of points where the Fourier transform should be evaluated\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.");
 static PyObject *nfft3_inplace(PyObject *self, PyObject *args)
 {
   PyObject *in_obj, *coord_obj, *out_obj;
@@ -265,7 +269,7 @@ static PyObject *nfft3_inplace(PyObject *self, PyObject *args)
   return Py_BuildValue("i", 1);
 }
 
-
+PyDoc_STRVAR(nfftn__doc__, "nfft3(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\n\nupdated");
 static PyObject *nfftn(PyObject *self, PyObject *args)
 {
   PyObject *in_obj, *coord_obj;
@@ -296,16 +300,32 @@ static PyObject *nfftn(PyObject *self, PyObject *args)
   }
   int number_of_points = (int) PyArray_DIM(coord_array, 0);
 
-
   nfft_plan my_plan;
-  int M_total = 1;
-  int dims[ndim];
-  for (int dim = 0; dim < ndim; ++dim) {
-    dims[dim] = (int)PyArray_DIM(in_array, dim);
-    M_total *= dims[dim];
-  }
-  nfft_init(&my_plan, ndim, dims, M_total);
-  memcpy(my_plan.f_hat, PyArray_DATA(in_array), M_total*sizeof(fftw_complex));
+  if (ndim == 1) {
+    int dim_x = (int)PyArray_DIM(in_array, 0);
+    nfft_init_1d(&my_plan, dim_x, number_of_points);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_x*sizeof(fftw_complex));
+  } else if (ndim == 2) {
+    int dim_y = (int)PyArray_DIM(in_array, 0);
+    int dim_x = (int)PyArray_DIM(in_array, 1);
+    nfft_init_2d(&my_plan, dim_y, dim_x, number_of_points);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_y*dim_x*sizeof(fftw_complex));
+  } else if (ndim == 3) {
+    int dim_z = (int)PyArray_DIM(in_array, 0);
+    int dim_y = (int)PyArray_DIM(in_array, 1);
+    int dim_x = (int)PyArray_DIM(in_array, 2);
+    nfft_init_3d(&my_plan, dim_z, dim_y, dim_x, number_of_points);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_z*dim_y*dim_x*sizeof(fftw_complex));
+  } else {
+    int M_total = 1;
+    int dims[ndim];
+    for (int dim = 0; dim < ndim; ++dim) {
+      dims[dim] = (int)PyArray_DIM(in_array, dim);
+      M_total *= dims[dim];
+    }
+    nfft_init(&my_plan, ndim, dims, M_total);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), M_total*sizeof(fftw_complex));
+  } 
   memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
   
   if (my_plan.nfft_flags &PRE_PSI) {
@@ -325,6 +345,7 @@ static PyObject *nfftn(PyObject *self, PyObject *args)
   return out_array;
 }
 
+PyDoc_STRVAR(nfftn_inplace__doc__, "nfft3(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.");
 static PyObject *nfftn_inplace(PyObject *self, PyObject *args)
 {
   PyObject *in_obj, *coord_obj, *out_obj;
@@ -456,6 +477,7 @@ static PyObject *nfft3(PyObject *self, PyObject *args)
 }
 */
 
+PyDoc_STRVAR(Transformer__doc__, "Transformer(real_space)\n\nCreates an object that can be used to calculate multiple nfft transforms from the same array.");
 typedef struct {
   PyObject_HEAD
   nfft_plan my_plan;
@@ -498,6 +520,7 @@ static void Transformer_dealloc(Transformer *self)
   self->ob_type->tp_free((PyObject *)self);
 }
 
+PyDoc_STRVAR(Transformer_transform__doc__, "transform(coordinates)\n\nReturns transformation at given coordintase.\n\nCoordinate array has format [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] and can be of any type that can direcly be converted to an ndarray.");
 static PyObject *Transformer_transform(Transformer *self, PyObject *args)
 {
   PyObject *input_obj;
@@ -548,7 +571,8 @@ static PyObject *Transformer_transform(Transformer *self, PyObject *args)
   return Py_BuildValue("");
 }
 
-static PyObject *ndim(Transformer *self, PyObject *args, PyObject *kwds)
+PyDoc_STRVAR(Transformer_ndim__doc__, "ndim()\n\nGet the number of dimensions.");
+static PyObject *Transformer_ndim(Transformer *self, PyObject *args, PyObject *kwds)
 {
   if (self->ndim > 0) {
     return Py_BuildValue("i", self->ndim);
@@ -563,8 +587,8 @@ static PyMemberDef Transformer_members[] = {
 };
 
 static PyMethodDef Transformer_methods[] = {
-  {"ndim", (PyCFunction) ndim, METH_VARARGS, "ndim()\n\nGet the number of dimensions."},
-  {"transform", (PyCFunction) Transformer_transform, METH_VARARGS, "transform(coordinates)\n\nReturns transformation at given coordintase.\n\nCoordinate array has format [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] and can be of any type that can direcly be converted to an ndarray."},
+  {"ndim", (PyCFunction) Transformer_ndim, METH_VARARGS, Transformer_ndim__doc__},
+  {"transform", (PyCFunction) Transformer_transform, METH_VARARGS, Transformer_transform__doc__},
   {NULL}
 };
 
@@ -590,7 +614,7 @@ static PyTypeObject TransformerType = {
    0,                         /* tp_setattro */
    0,                         /* tp_as_buffer */
    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags*/
-   "Transformer(real_space)\n\nCreates an object that can be used to calculate multiple nfft transforms from the same array.",  /* tp_doc */
+   Transformer__doc__,        /* tp_doc */
    0,                         /* tp_traverse */
    0,                         /* tp_clear */
    0,                         /* tp_richcompare */
@@ -611,12 +635,12 @@ static PyTypeObject TransformerType = {
 };
 
 static PyMethodDef NfftMethods[] = {
-  {"nfft", nfft, METH_VARARGS, "nfft(real_space, coordinates)\n\nCalculate 1d nfft.\n\real_space should be 1d array.\ncoordinates should be a 1d array of the coordinates where the Fourier transform should be evaluated."},
-  {"nfft_inplace", nfft_inplace, METH_VARARGS, "nfft_inplace(real_space, coordinates, output_array)\n\nCalculate 1d nfft.\n\real space should be 1d array.\ncoordinates should be a 1d array of the coordinates where the Fourier transform should be evaluated\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation."},
-  {"nfft3", nfft3, METH_VARARGS, "nfft3(real_space, coordinates)\n\nCalculate 3d nfft.\n\real_space should be 3d array.\ncoordinates should be a Nx3 array where N is the number of points where the Fourier transform should be evaluated."},
-  {"nfft3_inplace", nfft3_inplace, METH_VARARGS, "nfft3(real_space, coordinates)\n\nCalculate 3d nfft.\n\real_space should be 3d array.\ncoordinates should be a Nx3 array where N is the number of points where the Fourier transform should be evaluated\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation."},
-  {"nfftn", nfftn, METH_VARARGS, "nfft3(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array"},
-  {"nfftn_inplace", nfftn_inplace , METH_VARARGS, "nfft3(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation."},
+  {"nfft", nfft, METH_VARARGS, nfft__doc__},
+  {"nfft_inplace", nfft_inplace, METH_VARARGS, nfft_inplace__doc__},
+  {"nfft3", nfft3, METH_VARARGS, nfft3__doc__},
+  {"nfft3_inplace", nfft3_inplace, METH_VARARGS, nfft3_inplace__doc__},
+  {"nfftn", nfftn, METH_VARARGS, nfftn__doc__},
+  {"nfftn_inplace", nfftn_inplace , METH_VARARGS, nfftn_inplace__doc__},
   {NULL, NULL, 0, NULL}
 };
 
