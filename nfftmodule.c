@@ -18,7 +18,7 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
     return NULL;
   }
   */
-  static char *kwlist[] = {"real_space", "coordinates", "direct", NULL};
+  static char *kwlist[] = {"real_space", "coordinates", "use_direct", NULL};
   //static char *kwlist[] = {"direct", NULL};
   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|O", kwlist, &in_obj, &coord_obj, &use_direct_obj)) {
   //if (!PyArg_ParseTuple(args, "OO|O", &in_obj, &coord_obj, &use_direct_obj)) {
@@ -68,15 +68,15 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
     nfft_init_3d(&my_plan, dim_z, dim_y, dim_x, number_of_points);
     memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_z*dim_y*dim_x*sizeof(fftw_complex));
   } else {
-    int M_total = 1;
+    int total_number_of_pixels = 1;
     int dims[ndim];
     for (int dim = 0; dim < ndim; ++dim) {
       dims[dim] = (int)PyArray_DIM(in_array, dim);
-      M_total *= dims[dim];
+      total_number_of_pixels *= dims[dim];
     }
-    nfft_init(&my_plan, ndim, dims, M_total);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), M_total*sizeof(fftw_complex));
-  } 
+    nfft_init(&my_plan, ndim, dims, number_of_points);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), total_number_of_pixels*sizeof(fftw_complex));
+  }
   memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
   
   if (my_plan.nfft_flags &PRE_PSI) {
@@ -88,7 +88,7 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
   } else {
     nfft_trafo(&my_plan);
   }
-  
+
   //npy_intp out_dim[] = {number_of_points};
   int out_dim[] = {number_of_points};
   //PyObject *vecout_array = PyArray_FromDims(1, vecout_dims, NPY_COMPLEX128);
@@ -106,7 +106,7 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   PyObject *in_obj, *coord_obj, *out_obj;
   PyObject *use_direct_obj = NULL;
 
-  static char *kwlist[] = {"real_space", "coordinates", "output", "direct", NULL};
+  static char *kwlist[] = {"real_space", "coordinates", "output", "use_direct", NULL};
   //if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|O", kwlist, &in_obj, &coord_obj, &use_direct_obj)) {
   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOO|O", kwlist, &in_obj, &coord_obj, &out_obj, &use_direct_obj)) {
     return NULL;
@@ -162,14 +162,32 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   }
 
   nfft_plan my_plan;
-  int M_total = 1;
-  int dims[ndim];
-  for (int dim = 0; dim < ndim; ++dim) {
-    dims[dim] = (int)PyArray_DIM(in_array, dim);
-    M_total *= dims[dim];
-  }
-  nfft_init(&my_plan, ndim, dims, M_total);
-  memcpy(my_plan.f_hat, PyArray_DATA(in_array), M_total*sizeof(fftw_complex));
+  if (ndim == 1) {
+    int dim_x = (int)PyArray_DIM(in_array, 0);
+    nfft_init_1d(&my_plan, dim_x, number_of_points);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_x*sizeof(fftw_complex));
+  } else if (ndim == 2) {
+    int dim_y = (int)PyArray_DIM(in_array, 0);
+    int dim_x = (int)PyArray_DIM(in_array, 1);
+    nfft_init_2d(&my_plan, dim_y, dim_x, number_of_points);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_y*dim_x*sizeof(fftw_complex));
+  } else if (ndim == 3) {
+    int dim_z = (int)PyArray_DIM(in_array, 0);
+    int dim_y = (int)PyArray_DIM(in_array, 1);
+    int dim_x = (int)PyArray_DIM(in_array, 2);
+    nfft_init_3d(&my_plan, dim_z, dim_y, dim_x, number_of_points);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_z*dim_y*dim_x*sizeof(fftw_complex));
+  } else {
+    int total_number_of_pixels = 1;
+    int dims[ndim];
+    for (int dim = 0; dim < ndim; ++dim) {
+      dims[dim] = (int)PyArray_DIM(in_array, dim);
+      total_number_of_pixels *= dims[dim];
+    }
+    nfft_init(&my_plan, ndim, dims, number_of_points);
+    memcpy(my_plan.f_hat, PyArray_DATA(in_array), total_number_of_pixels*sizeof(fftw_complex));
+  } 
+
   memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
   
   if (my_plan.nfft_flags &PRE_PSI) {
@@ -249,6 +267,7 @@ typedef struct {
   PyArrayObject *real_map;
   fftw_complex *sneaky_ref;
   int ndim;
+  int max_number_of_points;
 }Transformer;
 
 static PyMemberDef Transformer_members[] = {
@@ -259,7 +278,7 @@ static PyMemberDef Transformer_members[] = {
 static int Transformer_init(Transformer *self, PyObject *args, PyObject *kwds)
 {
   PyObject *input_obj;
-  if (!PyArg_ParseTuple(args, "O", &input_obj)) {
+  if (!PyArg_ParseTuple(args, "Oi", &input_obj, &self->max_number_of_points)) {
     return -1;
   }
   PyObject *input_array = PyArray_FROM_OTF(input_obj, NPY_COMPLEX128, NPY_IN_ARRAY);
@@ -269,13 +288,13 @@ static int Transformer_init(Transformer *self, PyObject *args, PyObject *kwds)
   self->real_map = (PyArrayObject *)input_array;
 
   self->ndim = PyArray_NDIM(input_array);
-  int M_total = 1;
+  int total_number_of_pixels = 1;
   int dims[self->ndim];
   for (int dim = 0; dim < self->ndim; ++dim) {
     dims[dim] = (int) PyArray_DIM(input_array, dim);
-    M_total *= dims[dim];
+    total_number_of_pixels *= dims[dim];
   }
-  nfft_init(&self->my_plan, self->ndim, dims, M_total);
+  nfft_init(&self->my_plan, self->ndim, dims, self->max_number_of_points);
   //free(self->my_plan.f_hat);
   self->sneaky_ref = self->my_plan.f_hat;
   self->my_plan.f_hat = (fftw_complex *)PyArray_DATA(self->real_map);
@@ -291,32 +310,50 @@ static void Transformer_dealloc(Transformer *self)
 }
 
 PyDoc_STRVAR(Transformer_transform__doc__, "transform(coordinates)\n\nReturns transformation at given coordintase.\n\nCoordinate array has format [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] and can be of any type that can direcly be converted to an ndarray.");
-static PyObject *Transformer_transform(Transformer *self, PyObject *args)
+static PyObject *Transformer_transform(Transformer *self, PyObject *args, PyObject *kwargs)
 {
   PyObject *input_obj;
-  if (!PyArg_ParseTuple(args, "O", &input_obj)) {
+  PyObject *use_direct_obj = NULL;
+  //if (!PyArg_ParseTuple(args, "O", &input_obj)) {
+  static char *kwlist[] = {"coordinates", "use_direct", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", kwlist, &input_obj, &use_direct_obj)) {
     return NULL;
   }
   PyObject *coordinates_array = PyArray_FROM_OTF(input_obj, NPY_FLOAT64, NPY_IN_ARRAY);
-
+  
   if (coordinates_array == NULL) {
     return NULL;
   }
+
   if ((PyArray_NDIM(coordinates_array) != 2 || PyArray_DIM(coordinates_array, 1) != self->ndim) && (self->ndim != 1 || PyArray_NDIM(coordinates_array) != 1)) {
-    PyErr_SetString(PyExc_ValueError, "Coordinates must be given as array of dimensions [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] of [NUMBER_OF_POINTS for 1D transforms.\n");
+    PyErr_SetString(PyExc_ValueError, "Coordinates must be given as array of dimensions [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] or [NUMBER_OF_POINTS for 1D transforms.\n");
     Py_XDECREF(coordinates_array);
     return NULL;
   }
+
   int number_of_points = (int) PyArray_DIM(coordinates_array, 0);
-  
+  if (number_of_points > self->max_number_of_points) {
+    PyErr_SetString(PyExc_ValueError, "Coordinates array is longer than max_number_of_coordinates");
+    return NULL;
+  }
+
+  int use_direct = 0;
+  if (use_direct_obj != NULL && PyObject_IsTrue(use_direct_obj)) {
+    use_direct = 1;
+  }
+
   memcpy(self->my_plan.x, PyArray_DATA(coordinates_array), self->ndim*number_of_points*sizeof(double));
-  
+
   if (self->my_plan.nfft_flags &PRE_PSI) {
     nfft_precompute_one_psi(&self->my_plan);
   }
 
-  nfft_trafo(&self->my_plan);
-  
+  if (use_direct == 1) {
+    nfft_trafo_direct(&self->my_plan);
+  } else {
+    nfft_trafo(&self->my_plan);
+  }
+
   npy_intp out_dim[] = {number_of_points};
   PyObject *out_array = (PyObject *)PyArray_SimpleNew(1, out_dim, NPY_COMPLEX128);
   memcpy(PyArray_DATA(out_array), self->my_plan.f, number_of_points*sizeof(fftw_complex));
@@ -351,9 +388,16 @@ static PyObject *Transformer_ndim(Transformer *self, PyObject *args, PyObject *k
   }
 }
 
+PyDoc_STRVAR(Transformer_max_number_of_points__doc__, "max_number_of_points()\n\nGet the maximum length of coordinates array.");
+static PyObject *Transformer_max_number_of_points(Transformer *self, PyObject *args, PyObject *kwds)
+{
+  return Py_BuildValue("i", self->max_number_of_points);
+}
+
 static PyMethodDef Transformer_methods[] = {
+  {"transform", (PyCFunction) Transformer_transform, METH_VARARGS|METH_KEYWORDS, Transformer_transform__doc__},
   {"ndim", (PyCFunction) Transformer_ndim, METH_VARARGS, Transformer_ndim__doc__},
-  {"transform", (PyCFunction) Transformer_transform, METH_VARARGS, Transformer_transform__doc__},
+  {"max_number_of_points", (PyCFunction) Transformer_max_number_of_points, METH_VARARGS, Transformer_max_number_of_points__doc__},
   {NULL}
 };
 
