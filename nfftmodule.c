@@ -13,15 +13,8 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
   PyObject *in_obj, *coord_obj;
   PyObject *use_direct_obj = NULL;
   
-  /*
-  if (!PyArg_ParseTuple(args, "OO", &in_obj, &coord_obj)) {
-    return NULL;
-  }
-  */
   static char *kwlist[] = {"real_space", "coordinates", "use_direct", NULL};
-  //static char *kwlist[] = {"direct", NULL};
   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|O", kwlist, &in_obj, &coord_obj, &use_direct_obj)) {
-  //if (!PyArg_ParseTuple(args, "OO|O", &in_obj, &coord_obj, &use_direct_obj)) {
     return NULL;
   }
   int use_direct = 0;
@@ -52,31 +45,14 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
   int number_of_points = (int) PyArray_DIM(coord_array, 0);
 
   nfft_plan my_plan;
-  if (ndim == 1) {
-    int dim_x = (int)PyArray_DIM(in_array, 0);
-    nfft_init_1d(&my_plan, dim_x, number_of_points);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_x*sizeof(fftw_complex));
-  } else if (ndim == 2) {
-    int dim_y = (int)PyArray_DIM(in_array, 0);
-    int dim_x = (int)PyArray_DIM(in_array, 1);
-    nfft_init_2d(&my_plan, dim_y, dim_x, number_of_points);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_y*dim_x*sizeof(fftw_complex));
-  } else if (ndim == 3) {
-    int dim_z = (int)PyArray_DIM(in_array, 0);
-    int dim_y = (int)PyArray_DIM(in_array, 1);
-    int dim_x = (int)PyArray_DIM(in_array, 2);
-    nfft_init_3d(&my_plan, dim_z, dim_y, dim_x, number_of_points);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_z*dim_y*dim_x*sizeof(fftw_complex));
-  } else {
-    int total_number_of_pixels = 1;
-    int dims[ndim];
-    for (int dim = 0; dim < ndim; ++dim) {
-      dims[dim] = (int)PyArray_DIM(in_array, dim);
-      total_number_of_pixels *= dims[dim];
-    }
-    nfft_init(&my_plan, ndim, dims, number_of_points);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), total_number_of_pixels*sizeof(fftw_complex));
+  int total_number_of_pixels = 1;
+  int dims[ndim];
+  for (int dim = 0; dim < ndim; ++dim) {
+    dims[dim] = (int)PyArray_DIM(in_array, dim);
+    total_number_of_pixels *= dims[dim];
   }
+  nfft_init(&my_plan, ndim, dims, number_of_points);
+  memcpy(my_plan.f_hat, PyArray_DATA(in_array), total_number_of_pixels*sizeof(fftw_complex));
   memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
   
   if (my_plan.nfft_flags &PRE_PSI) {
@@ -89,10 +65,7 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
     nfft_trafo(&my_plan);
   }
 
-  //npy_intp out_dim[] = {number_of_points};
   int out_dim[] = {number_of_points};
-  //PyObject *vecout_array = PyArray_FromDims(1, vecout_dims, NPY_COMPLEX128);
-  //PyObject *out_array = (PyObject *)PyArray_SimpleNew(1, out_dim, NPY_COMPLEX128);
   PyObject *out_array = (PyObject *)PyArray_FromDims(1, out_dim, NPY_COMPLEX128);
   memcpy(PyArray_DATA(out_array), my_plan.f, number_of_points*sizeof(fftw_complex));
 
@@ -107,7 +80,6 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   PyObject *use_direct_obj = NULL;
 
   static char *kwlist[] = {"real_space", "coordinates", "output", "use_direct", NULL};
-  //if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|O", kwlist, &in_obj, &coord_obj, &use_direct_obj)) {
   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOO|O", kwlist, &in_obj, &coord_obj, &out_obj, &use_direct_obj)) {
     return NULL;
   }
@@ -162,32 +134,14 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   }
 
   nfft_plan my_plan;
-  if (ndim == 1) {
-    int dim_x = (int)PyArray_DIM(in_array, 0);
-    nfft_init_1d(&my_plan, dim_x, number_of_points);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_x*sizeof(fftw_complex));
-  } else if (ndim == 2) {
-    int dim_y = (int)PyArray_DIM(in_array, 0);
-    int dim_x = (int)PyArray_DIM(in_array, 1);
-    nfft_init_2d(&my_plan, dim_y, dim_x, number_of_points);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_y*dim_x*sizeof(fftw_complex));
-  } else if (ndim == 3) {
-    int dim_z = (int)PyArray_DIM(in_array, 0);
-    int dim_y = (int)PyArray_DIM(in_array, 1);
-    int dim_x = (int)PyArray_DIM(in_array, 2);
-    nfft_init_3d(&my_plan, dim_z, dim_y, dim_x, number_of_points);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), dim_z*dim_y*dim_x*sizeof(fftw_complex));
-  } else {
-    int total_number_of_pixels = 1;
-    int dims[ndim];
-    for (int dim = 0; dim < ndim; ++dim) {
-      dims[dim] = (int)PyArray_DIM(in_array, dim);
-      total_number_of_pixels *= dims[dim];
-    }
-    nfft_init(&my_plan, ndim, dims, number_of_points);
-    memcpy(my_plan.f_hat, PyArray_DATA(in_array), total_number_of_pixels*sizeof(fftw_complex));
-  } 
-
+  int total_number_of_pixels = 1;
+  int dims[ndim];
+  for (int dim = 0; dim < ndim; ++dim) {
+    dims[dim] = (int)PyArray_DIM(in_array, dim);
+    total_number_of_pixels *= dims[dim];
+  }
+  nfft_init(&my_plan, ndim, dims, number_of_points);
+  memcpy(my_plan.f_hat, PyArray_DATA(in_array), total_number_of_pixels*sizeof(fftw_complex));
   memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
   
   if (my_plan.nfft_flags &PRE_PSI) {
@@ -204,61 +158,6 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   nfft_finalize(&my_plan);
   return Py_BuildValue("i", 1);
 }
-
-
-/*
-static PyObject *nfft3(PyObject *self, PyObject *args)
-{
-  PyObject *vecin_obj, *veccoord_obj;
-  double *cin, *cout, *ccoord;
-
-  int number_of_pixels_x, number_of_pixels_y, number_of_pixels_z;
-  int number_of_points;
-  int i;
-
-  if (!PyArg_ParseTuple(args, "OO", &vecin_obj, &veccoord_obj))
-    return NULL;
-  PyObject *veccoord_array = PyArray_FROM_OTF(veccoord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
-  PyObject *vecin_array = PyArray_FROM_OTF(vecin_obj, NPY_COMPLEXLTR, NPY_IN_ARRAY);
-  if (veccoord_array == NULL || vecin_array == NULL) {
-    Py_XDECREF(veccoord_array);
-    Py_XDECREF(vecin_array);
-    return NULL;
-  }
-
-  if (PyArray_NDIM(vecin_array) != 3) {
-    Py_XDECREF(veccoord_array);
-    Py_XDECREF(vecin_array);
-    PyErr_SetString(PyExc_ValueError, "Input array must be three dimensional");
-    return NULL;
-  }
-  number_of_pixels_z = (int)PyArray_DIM(vecin_array, 0);
-  number_of_pixels_y = (int)PyArray_DIM(vecin_array, 1);
-  number_of_pixels_x = (int)PyArray_DIM(vecin_array, 2);
-
-  if (PyArray_NDIM(veccoord_array) != 2 || PyArray_DIM(veccoord_array, 1) != 3) {
-    Py_XDECREF(veccoord_array);
-    Py_XDECREF(vecin_array);
-    PyErr_SetString(PyExc_ValueError, "Coordinate array must be three dimensional");
-    return NULL;
-  }    
-  number_of_points = (int)PyArray_DIM(veccoord_array, 0);
-
-  ccoord = PyArray_DATA(veccoord_array);
-  cin = PyArray_DATA(vecin_array);
-
-  int vecout_dims[] = {number_of_points};
-  PyObject *vecout_array = PyArray_FromDims(1, vecout_dims, NPY_COMPLEX128);
-  cout = PyArray_DATA(vecout_array);
-
-
-
-  //return Py_BuildValue("i", 1);
-  Py_XDECREF(veccoord_array);
-  Py_XDECREF(vecin_array);
-  return vecout_array;
-}
-*/
 
 PyDoc_STRVAR(Transformer__doc__, "Transformer(real_space)\n\nCreates an object that can be used to calculate multiple nfft transforms from the same array.");
 typedef struct {
@@ -295,7 +194,6 @@ static int Transformer_init(Transformer *self, PyObject *args, PyObject *kwds)
     total_number_of_pixels *= dims[dim];
   }
   nfft_init(&self->my_plan, self->ndim, dims, self->max_number_of_points);
-  //free(self->my_plan.f_hat);
   self->sneaky_ref = self->my_plan.f_hat;
   self->my_plan.f_hat = (fftw_complex *)PyArray_DATA(self->real_map);
   return 0;
@@ -314,7 +212,6 @@ static PyObject *Transformer_transform(Transformer *self, PyObject *args, PyObje
 {
   PyObject *input_obj;
   PyObject *use_direct_obj = NULL;
-  //if (!PyArg_ParseTuple(args, "O", &input_obj)) {
   static char *kwlist[] = {"coordinates", "use_direct", NULL};
   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", kwlist, &input_obj, &use_direct_obj)) {
     return NULL;
@@ -358,24 +255,6 @@ static PyObject *Transformer_transform(Transformer *self, PyObject *args, PyObje
   PyObject *out_array = (PyObject *)PyArray_SimpleNew(1, out_dim, NPY_COMPLEX128);
   memcpy(PyArray_DATA(out_array), self->my_plan.f, number_of_points*sizeof(fftw_complex));
   return out_array;
-  /*
-  nfft_plan my_plan;
-  nfft_init_3d(&my_plan, number_of_pixels_z, number_of_pixels_y, number_of_pixels_x, number_of_points);
-
-  memcpy(my_plan.x, coord, 3*number_of_points*sizeof(double));
-  memcpy(my_plan.f_hat, in, 2*number_of_pixels_x*number_of_pixels_y*number_of_pixels_z*sizeof(double));
-
-  if (my_plan.nfft_flags &PRE_PSI) {
-    nfft_precompute_one_psi(&my_plan);
-  }
-  
-  nfft_trafo(&my_plan);
-  memcpy(out, my_plan.f, 2*number_of_points*sizeof(double));
-
-  nfft_finalize(&my_plan);
-  */
-
-  return Py_BuildValue("");
 }
 
 PyDoc_STRVAR(Transformer_ndim__doc__, "ndim()\n\nGet the number of dimensions.");
@@ -466,12 +345,3 @@ PyMODINIT_FUNC initnfft(void)
   PyModule_AddObject(m, "Transformer", (PyObject *)&TransformerType);
     
 }
-/*
-int main(int argc, char *argv[])
-{
-  Py_SetProgramName(argv[0]);
-  Py_Initialize();
-  initnfft_c();
-  return 0;
-}
-*/
