@@ -47,7 +47,8 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
   nfft_plan my_plan;
   int total_number_of_pixels = 1;
   int dims[ndim];
-  for (int dim = 0; dim < ndim; ++dim) {
+  int dim;
+  for (dim = 0; dim < ndim; ++dim) {
     dims[dim] = (int)PyArray_DIM(in_array, dim);
     total_number_of_pixels *= dims[dim];
   }
@@ -136,7 +137,8 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   nfft_plan my_plan;
   int total_number_of_pixels = 1;
   int dims[ndim];
-  for (int dim = 0; dim < ndim; ++dim) {
+  int dim;
+  for (dim = 0; dim < ndim; ++dim) {
     dims[dim] = (int)PyArray_DIM(in_array, dim);
     total_number_of_pixels *= dims[dim];
   }
@@ -189,7 +191,8 @@ static int Transformer_init(Transformer *self, PyObject *args, PyObject *kwds)
   self->ndim = PyArray_NDIM(input_array);
   int total_number_of_pixels = 1;
   int dims[self->ndim];
-  for (int dim = 0; dim < self->ndim; ++dim) {
+  int dim;
+  for (dim = 0; dim < self->ndim; ++dim) {
     dims[dim] = (int) PyArray_DIM(input_array, dim);
     total_number_of_pixels *= dims[dim];
   }
@@ -343,5 +346,4 @@ PyMODINIT_FUNC initnfft(void)
 
   Py_INCREF(&TransformerType);
   PyModule_AddObject(m, "Transformer", (PyObject *)&TransformerType);
-    
 }
