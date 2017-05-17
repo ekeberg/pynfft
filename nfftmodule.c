@@ -54,10 +54,26 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
   }
   nfft_init(&my_plan, ndim, dims, number_of_points);
   memcpy(my_plan.f_hat, PyArray_DATA(in_array), total_number_of_pixels*sizeof(fftw_complex));
-  memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
-  
-  if (my_plan.nfft_flags &PRE_PSI) {
+  //memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
+  double *coord_array_data = (double *) PyArray_DATA(coord_array);
+  for (int i = 0; i < ndim*number_of_points; i++) {
+    my_plan.x[i] = coord_array_data[i] * pixel_size;
+  }
+
+  if (my_plan.flags &PRE_PSI) {
     nfft_precompute_one_psi(&my_plan);
+  }
+  
+  if (my_plan.flags &PRE_PSI) {
+    nfft_precompute_psi(&my_plan);
+  }
+
+  if (my_plan.flags &PRE_FULL_PSI) {
+    nfft_precompute_full_psi(&my_plan);
+  }
+
+  if (my_plan.flags &PRE_LIN_PSI) {
+    nfft_precompute_lin_psi(&my_plan);
   }
 
   if (use_direct == 1) {
@@ -66,22 +82,29 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
     nfft_trafo(&my_plan);
   }
 
-  int out_dim[] = {number_of_points};
-  PyObject *out_array = (PyObject *)PyArray_FromDims(1, out_dim, NPY_COMPLEX128);
+  //int out_dim[] = {number_of_points};
+  npy_intp *out_dim = malloc(1*sizeof(npy_intp));
+  out_dim[0] = number_of_points;
+  //PyObject *out_array = (PyObject *)PyArray_FromDims(1, out_dim, NPY_COMPLEX128);
+  PyObject *out_array = (PyObject *)PyArray_SimpleNew(1, out_dim, NPY_COMPLEX128);
   memcpy(PyArray_DATA(out_array), my_plan.f, number_of_points*sizeof(fftw_complex));
+
+  Py_XDECREF(coord_array);
+  Py_XDECREF(in_array);
 
   nfft_finalize(&my_plan);
   return out_array;
 }
 
-PyDoc_STRVAR(nfft_inplace__doc__, "nfft_inplace(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.\ndirect (optional) requires the use of the more accurate but slower ndft (default is False).");
+PyDoc_STRVAR(nfft_inplace__doc__, "nfft_inplace(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\nreal_space is a float indicating the pixel_size of the input array\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\noutput_array should be ndarray of type complex128. The is written to here, if the array is a continuous block in memory this can speed up the calculation.\ndirect (optional) requires the use of the more accurate but slower ndft (default is False).");
 static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
 {
   PyObject *in_obj, *coord_obj, *out_obj;
   PyObject *use_direct_obj = NULL;
+  double pixel_size;
 
-  static char *kwlist[] = {"real_space", "coordinates", "output", "use_direct", NULL};
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOO|O", kwlist, &in_obj, &coord_obj, &out_obj, &use_direct_obj)) {
+  static char *kwlist[] = {"real_space", "pixel_size", "coordinates", "output", "use_direct", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OdOO|O", kwlist, &in_obj, &pixel_size, &coord_obj, &out_obj, &use_direct_obj)) {
     return NULL;
   }
   int use_direct = 0;
@@ -100,6 +123,8 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   int ndim = PyArray_NDIM(in_array);
   if (ndim <= 0) {
     PyErr_SetString(PyExc_ValueError, "Input array can't be 0 dimensional\n");
+    Py_XDECREF(coord_array);
+    Py_XDECREF(in_array);
     return NULL;
   }
 
@@ -144,10 +169,26 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   }
   nfft_init(&my_plan, ndim, dims, number_of_points);
   memcpy(my_plan.f_hat, PyArray_DATA(in_array), total_number_of_pixels*sizeof(fftw_complex));
-  memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
+  //memcpy(my_plan.x, PyArray_DATA(coord_array), ndim*number_of_points*sizeof(double));
+  double *coord_array_data = (double *) PyArray_DATA(coord_array);
+  for (int i = 0; i < ndim*number_of_points; i++) {
+    my_plan.x[i] = coord_array_data[i] * pixel_size;
+  }
   
-  if (my_plan.nfft_flags &PRE_PSI) {
+  if (my_plan.flags &PRE_ONE_PSI) {
     nfft_precompute_one_psi(&my_plan);
+  }
+  
+  if (my_plan.flags &PRE_PSI) {
+    nfft_precompute_psi(&my_plan);
+  }
+
+  if (my_plan.flags &PRE_FULL_PSI) {
+    nfft_precompute_full_psi(&my_plan);
+  }
+
+  if (my_plan.flags &PRE_LIN_PSI) {
+    nfft_precompute_lin_psi(&my_plan);
   }
 
   if (use_direct == 1) {
@@ -156,6 +197,9 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
     nfft_trafo(&my_plan);
   }
   memcpy(PyArray_DATA(out_array), my_plan.f, number_of_points*sizeof(fftw_complex));
+
+  Py_XDECREF(coord_array);
+  Py_XDECREF(in_array);
 
   nfft_finalize(&my_plan);
   return Py_BuildValue("i", 1);
@@ -166,6 +210,7 @@ typedef struct {
   PyObject_HEAD
   nfft_plan my_plan;
   PyArrayObject *real_map;
+  double pixel_size;
   fftw_complex *sneaky_ref;
   int ndim;
   int max_number_of_points;
@@ -173,13 +218,14 @@ typedef struct {
 
 static PyMemberDef Transformer_members[] = {
   {"real_map", T_OBJECT_EX, offsetof(Transformer, real_map), 0, "Real space map."},
+  {"pixel_size", T_DOUBLE, offsetof(Transformer, pixel_size), 0, "Pixel size"},
   {NULL}
 };
 
 static int Transformer_init(Transformer *self, PyObject *args, PyObject *kwds)
 {
   PyObject *input_obj;
-  if (!PyArg_ParseTuple(args, "Oi", &input_obj, &self->max_number_of_points)) {
+  if (!PyArg_ParseTuple(args, "Odi", &input_obj, &self->pixel_size, &self->max_number_of_points)) {
     return -1;
   }
   PyObject *input_array = PyArray_FROM_OTF(input_obj, NPY_COMPLEX128, NPY_IN_ARRAY);
@@ -242,10 +288,26 @@ static PyObject *Transformer_transform(Transformer *self, PyObject *args, PyObje
     use_direct = 1;
   }
 
-  memcpy(self->my_plan.x, PyArray_DATA(coordinates_array), self->ndim*number_of_points*sizeof(double));
+  //memcpy(self->my_plan.x, PyArray_DATA(coordinates_array), self->ndim*number_of_points*sizeof(double));
+  double *coordinates_array_data = (double *) PyArray_DATA(coordinates_array);
+  for (int i = 0; i < self->ndim*number_of_points; i++) {
+    self->my_plan.x[i] = coordinates_array_data[i] * self->pixel_size;
+  }
 
-  if (self->my_plan.nfft_flags &PRE_PSI) {
+  if (self->my_plan.flags & PRE_PSI) {
     nfft_precompute_one_psi(&self->my_plan);
+  }
+  
+  if (self->my_plan.flags & PRE_PSI) {
+    nfft_precompute_psi(&self->my_plan);
+  }
+
+  if (self->my_plan.flags & PRE_FULL_PSI) {
+    nfft_precompute_full_psi(&self->my_plan);
+  }
+
+  if (self->my_plan.flags & PRE_LIN_PSI) {
+    nfft_precompute_lin_psi(&self->my_plan);
   }
 
   if (use_direct == 1) {
@@ -254,7 +316,9 @@ static PyObject *Transformer_transform(Transformer *self, PyObject *args, PyObje
     nfft_trafo(&self->my_plan);
   }
 
-  npy_intp out_dim[] = {number_of_points};
+  //npy_intp out_dim[] = {number_of_points};
+  npy_intp *out_dim = malloc(1*sizeof(npy_intp));
+  out_dim[0] = number_of_points;
   PyObject *out_array = (PyObject *)PyArray_SimpleNew(1, out_dim, NPY_COMPLEX128);
   memcpy(PyArray_DATA(out_array), self->my_plan.f, number_of_points*sizeof(fftw_complex));
   return out_array;
