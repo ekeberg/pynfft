@@ -4,6 +4,7 @@
 #include <nfft3.h>
 #include <math.h>
 #include <stdio.h>
+#include <complex.h>
 
 //#include "nfftclassmodule.h"
 
@@ -51,14 +52,17 @@ static PyObject *ndfft(PyObject *self, PyObject *args, PyObject *kwargs)
     return NULL;
   }
 
-  if (PyArray_NDIM(coord_array) != 2 || PyArray_DIM(coord_array, 0) != PyArray_DIM(in_array, 0)) {
+  if ((PyArray_NDIM(coord_array) != 2 ||
+       PyArray_DIM(coord_array, 1) != ndim ||
+       PyArray_DIM(coord_array, 0) != PyArray_DIM(in_array, 0)) &&
+      (PyArray_NDIM(coord_array) != 1 || number_of_dimensions != 1 || PyArray_DIM(coord_array, 0) != PyArray_DIM(in_array, 0))) {
     PyErr_SetString(PyExc_ValueError, "Values and coordinates must have the same length");
     Py_XDECREF(coord_array);
     Py_XDECREF(in_array);
     return NULL;
   }
 
-  if (PyArray_DIM(coord_array, 1) != number_of_dimensions) {
+  if (number_of_dimensions != 1 && PyArray_DIM(coord_array, 1) != PyArray_DIM(in_array, 0)) {
     PyErr_SetString(PyExc_ValueError, "Dimensionality of coordinates and shape must match.");
     Py_XDECREF(coord_array);
     Py_XDECREF(in_array);
@@ -105,7 +109,19 @@ static PyObject *ndfft(PyObject *self, PyObject *args, PyObject *kwargs)
     nfft_adjoint(&my_plan);
   }
 
-  memcpy(PyArray_DATA(out_array), my_plan.f_hat, ((int)PyArray_SIZE(out_array))*sizeof(fftw_complex));
+  //memcpy(PyArray_DATA(out_array), my_plan.f_hat, ((int)PyArray_SIZE(out_array))*sizeof(fftw_complex));
+  int output_size = ((int)PyArray_SIZE(out_array));
+  //fftw_complex *out_array_data = (fftw_complex *) PyArray_DATA(out_array);
+
+  /* We are doing an inverse transform to get the nonequispaced to equispaced. Therefore
+     we have to conjugate the output since we are actually wanting a forward transform. */
+  double *out_array_data = (double *) PyArray_DATA(out_array);
+  double *f_hat_as_double = (double *) my_plan.f_hat;
+  for (int i = 0; i < output_size; i++) {
+    out_array_data[2*i] = f_hat_as_double[2*i];
+    out_array_data[2*i+1] = -f_hat_as_double[2*i+1];
+    //printf("%g, %g\n", out_array_data[2*i], out_array_data[2*i+1]);
+  }
 
   nfft_finalize(&my_plan);
   free(shape);
@@ -285,7 +301,7 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
     my_plan.x[i] = coord_array_data[i] * pixel_size;
   }
 
-  if (my_plan.flags &PRE_PSI) {
+  if (my_plan.flags &PRE_ONE_PSI) {
     nfft_precompute_one_psi(&my_plan);
   }
   
@@ -404,7 +420,7 @@ static PyObject *Transformer_transform(Transformer *self, PyObject *args, PyObje
     self->my_plan.x[i] = coordinates_array_data[i] * self->pixel_size;
   }
 
-  if (self->my_plan.flags & PRE_PSI) {
+  if (self->my_plan.flags & PRE_ONE_PSI) {
     nfft_precompute_one_psi(&self->my_plan);
   }
   
