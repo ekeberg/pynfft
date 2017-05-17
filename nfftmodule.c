@@ -7,14 +7,124 @@
 
 //#include "nfftclassmodule.h"
 
-PyDoc_STRVAR(nfft__doc__, "nfft(real_space, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\ndirect (optional) requires the use of the more accurate but slower ndft (default is False)");
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+
+PyDoc_STRVAR(ndfft__doc__, "ndfft(values, coordinates, output_shape, pixel_size)\n\nCalculate the fft of arbitrarily spaced points.\n\values should be an  array of length N.\ncoordinates shoulb be an NxD dimensional array.\noutput_shape is a tuple indicating the dimensions of the output array\npixel_size is a float describing the pixel spacing of the output array");
+static PyObject *ndfft(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+  PyObject *in_obj, *coord_obj;
+  PyObject *use_direct_obj = NULL;
+  PyObject *shape_tuple_obj;
+  //PyTupleObject *shape_tuple;
+  double pixel_size;
+
+  static char *kwlist[] = {"values", "coordinates", "output_shape", "pixel_size", "use_direct", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOOd|O", kwlist, &in_obj, &coord_obj, &shape_tuple_obj,
+				   &pixel_size, &use_direct_obj)) {
+    return NULL;
+  }
+  int use_direct = 0;
+  if (use_direct_obj != NULL && PyObject_IsTrue(use_direct_obj)) {
+    use_direct = 1;
+  }
+  
+  int number_of_dimensions = PyTuple_Size(shape_tuple_obj);
+  npy_intp *shape = malloc(number_of_dimensions*sizeof(npy_intp));
+  for (int i = 0; i < number_of_dimensions; i++) {
+    shape[i] = (npy_intp) PyInt_AsLong(PyTuple_GetItem(shape_tuple_obj, i));
+  }
+    
+  PyObject *coord_array = PyArray_FROM_OTF(coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
+  PyObject *in_array = PyArray_FROM_OTF(in_obj, NPY_COMPLEX128, NPY_IN_ARRAY);
+
+  if (coord_array == NULL || in_array == NULL) {
+    Py_XDECREF(coord_array);
+    Py_XDECREF(in_array);
+    return NULL;
+  }
+
+  int ndim = PyArray_NDIM(in_array);
+  if (ndim != 1) {
+    PyErr_SetString(PyExc_ValueError, "Input array must be 1 dimensional\n");
+    Py_XDECREF(coord_array);
+    Py_XDECREF(in_array);
+    return NULL;
+  }
+
+  if (PyArray_NDIM(coord_array) != 2 || PyArray_DIM(coord_array, 0) != PyArray_DIM(in_array, 0)) {
+    PyErr_SetString(PyExc_ValueError, "Values and coordinates must have the same length");
+    Py_XDECREF(coord_array);
+    Py_XDECREF(in_array);
+    return NULL;
+  }
+
+  if (PyArray_DIM(coord_array, 1) != number_of_dimensions) {
+    PyErr_SetString(PyExc_ValueError, "Dimensionality of coordinates and shape must match.");
+    Py_XDECREF(coord_array);
+    Py_XDECREF(in_array);
+    return NULL;
+  }
+
+  PyObject *out_array = (PyObject *)PyArray_SimpleNew(number_of_dimensions, shape, NPY_COMPLEX128);
+  
+  int number_of_points = (int) PyArray_DIM(coord_array, 0);
+
+  nfft_plan my_plan;
+
+  int *shape_int = malloc(number_of_dimensions*sizeof(int));
+  for (int i = 0; i < number_of_dimensions; i++) {
+    shape_int[i] = shape[i];
+  }
+  nfft_init(&my_plan, number_of_dimensions, shape_int, number_of_points);
+  memcpy(my_plan.f, PyArray_DATA(in_array), number_of_points*sizeof(fftw_complex));
+  //memcpy(my_plan.x, PyArray_DATA(coord_array), number_of_dimensions*number_of_points*sizeof(double));
+  double *coord_array_data = (double *) PyArray_DATA(coord_array);
+  for (int i = 0; i < number_of_dimensions*number_of_points; i++) {
+    my_plan.x[i] = coord_array_data[i] * pixel_size;
+  }
+
+  if (my_plan.flags &PRE_ONE_PSI) {
+    nfft_precompute_one_psi(&my_plan);
+  }
+  
+  if (my_plan.flags &PRE_PSI) {
+    nfft_precompute_psi(&my_plan);
+  }
+
+  if (my_plan.flags &PRE_FULL_PSI) {
+    nfft_precompute_full_psi(&my_plan);
+  }
+
+  if (my_plan.flags &PRE_LIN_PSI) {
+    nfft_precompute_lin_psi(&my_plan);
+  }
+  
+  if (use_direct == 1) {
+    nfft_adjoint_direct(&my_plan);
+  } else {
+    nfft_adjoint(&my_plan);
+  }
+
+  memcpy(PyArray_DATA(out_array), my_plan.f_hat, ((int)PyArray_SIZE(out_array))*sizeof(fftw_complex));
+
+  nfft_finalize(&my_plan);
+  free(shape);
+
+  Py_XDECREF(coord_array);
+  Py_XDECREF(in_array);
+  
+  return out_array;
+}
+
+PyDoc_STRVAR(nfft__doc__, "nfft(real_space, pixel_size, coordinates)\n\nCalculate nfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\nreal_space is a float indicating the pixel size in the input arrray\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\ndirect (optional) requires the use of the more accurate but slower ndft (default is False)");
 static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
 {
   PyObject *in_obj, *coord_obj;
   PyObject *use_direct_obj = NULL;
+  double pixel_size;
   
-  static char *kwlist[] = {"real_space", "coordinates", "use_direct", NULL};
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|O", kwlist, &in_obj, &coord_obj, &use_direct_obj)) {
+  static char *kwlist[] = {"real_space", "pixel_size", "coordinates", "use_direct", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OdO|O", kwlist, &in_obj, &pixel_size, &coord_obj, &use_direct_obj)) {
     return NULL;
   }
   int use_direct = 0;
@@ -33,6 +143,8 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
   int ndim = PyArray_NDIM(in_array);
   if (ndim <= 0) {
     PyErr_SetString(PyExc_ValueError, "Input array can't be 0 dimensional\n");
+    Py_XDECREF(coord_array);
+    Py_XDECREF(in_array);
     return NULL;
   }
 
@@ -59,8 +171,8 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
   for (int i = 0; i < ndim*number_of_points; i++) {
     my_plan.x[i] = coord_array_data[i] * pixel_size;
   }
-
-  if (my_plan.flags &PRE_PSI) {
+  
+  if (my_plan.flags &PRE_ONE_PSI) {
     nfft_precompute_one_psi(&my_plan);
   }
   
@@ -123,8 +235,6 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   int ndim = PyArray_NDIM(in_array);
   if (ndim <= 0) {
     PyErr_SetString(PyExc_ValueError, "Input array can't be 0 dimensional\n");
-    Py_XDECREF(coord_array);
-    Py_XDECREF(in_array);
     return NULL;
   }
 
@@ -174,8 +284,8 @@ static PyObject *nfft_inplace(PyObject *self, PyObject *args, PyObject *kwargs)
   for (int i = 0; i < ndim*number_of_points; i++) {
     my_plan.x[i] = coord_array_data[i] * pixel_size;
   }
-  
-  if (my_plan.flags &PRE_ONE_PSI) {
+
+  if (my_plan.flags &PRE_PSI) {
     nfft_precompute_one_psi(&my_plan);
   }
   
@@ -347,6 +457,134 @@ static PyMethodDef Transformer_methods[] = {
   {NULL}
 };
 
+PyDoc_STRVAR(nnfft__doc__, "nnfft(real_coordinates, real_values, fourier_coordinates)\n\nCalculate nnfft from arbitrary dimensional array.\n\real_space should be an array (or any object that can trivially be converted to one.\ncoordinates should be a NxD array where N is the number of points where the Fourier transform should be evaluated and D is the dimensionality of the input array\ndirect (optional) requires the use of the more accurate but slower ndft (default is False)");
+
+static PyObject *nnfft(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+  PyObject *real_coord_obj, *fourier_coord_obj;
+  PyObject *real_values_obj;
+  PyObject *use_direct_obj = NULL;
+  
+  static char *kwlist[] = {"real_coordinates", "real_values", "fourier_coordinates", "use_direct", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OOO|O", kwlist, &real_coord_obj, &real_values_obj, &fourier_coord_obj, &use_direct_obj)) {
+    return NULL;
+  }
+  int use_direct = 0;
+  if (use_direct_obj != NULL && PyObject_IsTrue(use_direct_obj)) {
+    use_direct = 1;
+  }
+
+  PyObject *real_coord_array = PyArray_FROM_OTF(real_coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
+  PyObject *real_values_array = PyArray_FROM_OTF(real_values_obj, NPY_COMPLEX128, NPY_IN_ARRAY);
+  PyObject *fourier_coord_array = PyArray_FROM_OTF(fourier_coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
+  if (real_coord_array == NULL || real_values_array == NULL || fourier_coord_array == NULL) {
+    Py_XDECREF(real_coord_array);
+    Py_XDECREF(real_values_array);
+    Py_XDECREF(fourier_coord_array);
+    return NULL;
+  }
+
+  int ndim = PyArray_NDIM(real_coord_array);
+  if (ndim <= 0) {
+    PyErr_SetString(PyExc_ValueError, "Input array can't be 0 dimensional\n");
+    Py_XDECREF(real_coord_array);
+    Py_XDECREF(real_values_array);
+    Py_XDECREF(fourier_coord_array);
+    return NULL;
+  }
+  
+  if (ndim > 2 ||
+      (PyArray_NDIM(real_coord_array) != PyArray_NDIM(fourier_coord_array)) ||
+      (ndim == 2 && PyArray_DIM(real_coord_array, 1) != PyArray_DIM(fourier_coord_array, 1)) ||
+      (ndim == 2 && PyArray_DIM(real_coord_array, 0) != PyArray_DIM(real_values_array, 0)) ||
+      (ndim == 1 && PyArray_DIM(real_coord_array, 0) != PyArray_DIM(real_values_array, 0))) {
+    PyErr_SetString(PyExc_ValueError, "Coordinates must be given as array of dimensions [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] or [NUMBER_OF_POINTS] for 1D transforms.\n");
+    Py_XDECREF(real_coord_array);
+    Py_XDECREF(real_values_array);
+    Py_XDECREF(fourier_coord_array);
+    return NULL;
+  }
+
+  int number_of_real_points = (int) PyArray_DIM(real_coord_array, 0);
+  int number_of_fourier_points = (int) PyArray_DIM(fourier_coord_array, 0);
+  int number_of_dimensions = 0;
+  if (ndim == 2) {
+    number_of_dimensions = (int) PyArray_DIM(fourier_coord_array, 1);
+  } else {
+    number_of_dimensions = 1;
+  }
+  
+  nnfft_plan my_plan;
+
+  int cutoff_frequencies[ndim];
+  for (int dim_index = 0; dim_index < number_of_dimensions; dim_index++) {
+    // Find maximum of fourier and real coordinates
+    npy_intp dim_size_real = PyArray_DIM(real_coord_array, 0);
+    npy_intp dim_size_fourier = PyArray_DIM(fourier_coord_array, 0);
+    double max_real = 0.;
+    double max_fourier = 0.;
+    double *real_data = PyArray_DATA(real_coord_array);
+    double *fourier_data = PyArray_DATA(fourier_coord_array);
+    
+    for (int i = 0; i < dim_size_real; i++)
+      if (fabs(real_data[2*i + dim_index]) > max_real)
+	max_real = fabs(real_data[2*i + dim_index]);
+    for (int i = 0; i < dim_size_fourier; i++)
+      if (fabs(fourier_data[2*i + dim_index]) > max_fourier)
+	max_fourier = fabs(fourier_data[2*i + dim_index]);
+    
+    // Set the cut of frequency
+    cutoff_frequencies[dim_index] = (int) ceil(max_real*max_fourier);
+    //printf("set frequency cutoff to %d\n", cutoff_frequencies[dim_index]);
+    cutoff_frequencies[dim_index] = 1;
+  }
+
+  nnfft_init(&my_plan, number_of_dimensions, number_of_fourier_points, number_of_real_points, cutoff_frequencies);
+  memcpy(my_plan.x, PyArray_DATA(real_coord_array), number_of_dimensions*number_of_real_points*sizeof(double));
+  memcpy(my_plan.v, PyArray_DATA(fourier_coord_array), number_of_dimensions*number_of_fourier_points*sizeof(double));
+
+  if (my_plan.nnfft_flags &PRE_PSI) {
+    nnfft_precompute_psi(&my_plan);
+  }
+
+  if (my_plan.nnfft_flags &PRE_FULL_PSI) {
+    nnfft_precompute_full_psi(&my_plan);
+  }
+
+  if (my_plan.nnfft_flags &PRE_LIN_PSI) {
+    nnfft_precompute_lin_psi(&my_plan);
+  }
+
+  if (my_plan.nnfft_flags &PRE_PHI_HUT) {
+    nnfft_precompute_phi_hut(&my_plan);
+  }
+
+  memcpy(my_plan.f, PyArray_DATA(real_values_array), number_of_real_points*sizeof(fftw_complex));
+  
+  if (use_direct == 1) {
+    //nnfft_trafo_direct(&my_plan);
+    nnfft_adjoint_direct(&my_plan);
+  } else {
+    nnfft_adjoint(&my_plan);
+  }
+
+  //int out_dim[] = {number_of_fourier_points};
+  npy_intp *out_dim = malloc(1*sizeof(npy_intp));
+  out_dim[0] = number_of_fourier_points;
+
+  //PyObject *out_array = (PyObject *)PyArray_FromDims(1, out_dim, NPY_COMPLEX128);
+  PyObject *out_array = (PyObject *)PyArray_SimpleNew(1, out_dim, NPY_COMPLEX128);
+  memcpy(PyArray_DATA(out_array), my_plan.f_hat, number_of_fourier_points*sizeof(fftw_complex));
+
+  Py_XDECREF(real_coord_array);
+  Py_XDECREF(real_values_array);
+  Py_XDECREF(fourier_coord_array);
+
+  nnfft_finalize(&my_plan);
+  return out_array;
+  //return Py_BuildValue("i", 5);
+}
+
 static PyTypeObject TransformerType = {
    PyObject_HEAD_INIT(NULL)
    0,                         /* ob_size */
@@ -390,8 +628,10 @@ static PyTypeObject TransformerType = {
 };
 
 static PyMethodDef NfftMethods[] = {
+  {"ndfft", (PyCFunction)ndfft, METH_VARARGS|METH_KEYWORDS, ndfft__doc__},
   {"nfft", (PyCFunction)nfft, METH_VARARGS|METH_KEYWORDS, nfft__doc__},
   {"nfft_inplace", (PyCFunction)nfft_inplace , METH_VARARGS|METH_KEYWORDS, nfft_inplace__doc__},
+  {"nnfft", (PyCFunction)nnfft, METH_VARARGS|METH_KEYWORDS, nnfft__doc__},
   {NULL, NULL, 0, NULL}
 };
 
