@@ -113,10 +113,18 @@ class TestNfft(unittest.TestCase):
         #we use lower precision since these are actually expected to differ
         numpy.testing.assert_almost_equal(ft_nfft, ft_nfft_direct, decimal=2)
 
+    def test_ndfft_1d(self):
+        a = numpy.random.random(self._size)
+        ft_nfft = nfft.ndfft(a, self._coord_1d, a.shape, 1.)
+        ft_fftw = numpy.fft.fftshift(numpy.fft.fft(numpy.fft.fftshift(a)))
+        numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
+
     def test_failures(self):
         a = numpy.random.random(self._size)
         self.assertRaises(TypeError, nfft.nfft, (a, "hej"))
         self.assertRaises(TypeError, nfft.nfft, ("hej", a))
+
+
 
 if __name__ == "__main__":
     # unittest.main()
