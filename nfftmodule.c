@@ -10,6 +10,10 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
+#if PY_MAJOR_VERSION >= 3
+#define IS_PY3
+#endif
+
 PyDoc_STRVAR(ndfft__doc__, "ndfft(values, coordinates, output_shape, pixel_size)\n\nCalculate the fft of arbitrarily spaced points.\n\values should be an  array of length N.\ncoordinates shoulb be an NxD dimensional array.\noutput_shape is a tuple indicating the dimensions of the output array\npixel_size is a float describing the pixel spacing of the output array");
 static PyObject *ndfft(PyObject *self, PyObject *args, PyObject *kwargs)
 {
@@ -32,7 +36,11 @@ static PyObject *ndfft(PyObject *self, PyObject *args, PyObject *kwargs)
   int number_of_dimensions = PyTuple_Size(shape_tuple_obj);
   npy_intp *shape = malloc(number_of_dimensions*sizeof(npy_intp));
   for (int i = 0; i < number_of_dimensions; i++) {
+    #ifdef IS_PY3
+    shape[i] = (npy_intp) PyLong_AsLong(PyTuple_GetItem(shape_tuple_obj, i));
+    #else
     shape[i] = (npy_intp) PyInt_AsLong(PyTuple_GetItem(shape_tuple_obj, i));
+    #endif
   }
     
   PyObject *coord_array = PyArray_FROM_OTF(coord_obj, NPY_DOUBLE, NPY_IN_ARRAY);
@@ -379,7 +387,11 @@ static void Transformer_dealloc(Transformer *self)
   Py_XDECREF(self->real_map);
   self->my_plan.f_hat = self->sneaky_ref;
   nfft_finalize(&self->my_plan);
+  #ifdef IS_PY3
+  Py_TYPE(self)->tp_free((PyObject *)self);
+  #else
   self->ob_type->tp_free((PyObject *)self);
+  #endif
 }
 
 PyDoc_STRVAR(Transformer_transform__doc__, "transform(coordinates)\n\nReturns transformation at given coordintase.\n\nCoordinate array has format [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] and can be of any type that can direcly be converted to an ndarray.");
@@ -543,21 +555,31 @@ static PyObject *nnfft(PyObject *self, PyObject *args, PyObject *kwargs)
     double *fourier_data = PyArray_DATA(fourier_coord_array);
     
     for (int i = 0; i < dim_size_real; i++)
-      if (fabs(real_data[2*i + dim_index]) > max_real)
-	max_real = fabs(real_data[2*i + dim_index]);
+      if (fabs(real_data[number_of_dimensions*i + dim_index]) > max_real)
+	max_real = fabs(real_data[number_of_dimensions*i + dim_index]);
     for (int i = 0; i < dim_size_fourier; i++)
-      if (fabs(fourier_data[2*i + dim_index]) > max_fourier)
-	max_fourier = fabs(fourier_data[2*i + dim_index]);
+      if (fabs(fourier_data[number_of_dimensions*i + dim_index]) > max_fourier)
+	max_fourier = fabs(fourier_data[number_of_dimensions*i + dim_index]);
     
     // Set the cut of frequency
     cutoff_frequencies[dim_index] = (int) ceil(max_real*max_fourier);
     //printf("set frequency cutoff to %d\n", cutoff_frequencies[dim_index]);
-    cutoff_frequencies[dim_index] = 1;
+    //cutoff_frequencies[dim_index] = 20;
   }
 
-  nnfft_init(&my_plan, number_of_dimensions, number_of_fourier_points, number_of_real_points, cutoff_frequencies);
-  memcpy(my_plan.x, PyArray_DATA(real_coord_array), number_of_dimensions*number_of_real_points*sizeof(double));
-  memcpy(my_plan.v, PyArray_DATA(fourier_coord_array), number_of_dimensions*number_of_fourier_points*sizeof(double));
+  /* nnfft_init(&my_plan, number_of_dimensions, number_of_fourier_points, number_of_real_points, cutoff_frequencies); */
+  /* memcpy(my_plan.x, PyArray_DATA(real_coord_array), number_of_dimensions*number_of_real_points*sizeof(double)); */
+  /* memcpy(my_plan.v, PyArray_DATA(fourier_coord_array), number_of_dimensions*number_of_fourier_points*sizeof(double)); */
+
+  printf("cutoff = %d\n", cutoff_frequencies[0]);
+  nnfft_init(&my_plan, number_of_dimensions, number_of_real_points, number_of_fourier_points, cutoff_frequencies);
+  memcpy(my_plan.v, PyArray_DATA(real_coord_array), number_of_dimensions*number_of_real_points*sizeof(double));
+  memcpy(my_plan.x, PyArray_DATA(fourier_coord_array), number_of_dimensions*number_of_fourier_points*sizeof(double));
+
+  
+  /* if (my_plan.nnfft_flags &PRE_ONE_PSI) { */
+  /*   nnfft_precompute_one_psi(&my_plan); */
+  /* } */
 
   if (my_plan.nnfft_flags &PRE_PSI) {
     nnfft_precompute_psi(&my_plan);
@@ -575,13 +597,20 @@ static PyObject *nnfft(PyObject *self, PyObject *args, PyObject *kwargs)
     nnfft_precompute_phi_hut(&my_plan);
   }
 
-  memcpy(my_plan.f, PyArray_DATA(real_values_array), number_of_real_points*sizeof(fftw_complex));
+  /* memcpy(my_plan.f, PyArray_DATA(real_values_array), number_of_real_points*sizeof(fftw_complex)); */
+  memcpy(my_plan.f_hat, PyArray_DATA(real_values_array), number_of_real_points*sizeof(fftw_complex));
   
   if (use_direct == 1) {
-    //nnfft_trafo_direct(&my_plan);
-    nnfft_adjoint_direct(&my_plan);
+    nnfft_trafo_direct(&my_plan);
+    /* nnfft_adjoint_direct(&my_plan); */
   } else {
-    nnfft_adjoint(&my_plan);
+    PyErr_SetString(PyExc_NotImplementedError, "Only direct calculation works for nnfft right now.\n");
+    Py_XDECREF(real_coord_array);
+    Py_XDECREF(real_values_array);
+    Py_XDECREF(fourier_coord_array);
+    /* return NULL; */
+    nnfft_trafo(&my_plan);
+    /* nnfft_adjoint(&my_plan); */
   }
 
   //int out_dim[] = {number_of_fourier_points};
@@ -590,7 +619,21 @@ static PyObject *nnfft(PyObject *self, PyObject *args, PyObject *kwargs)
 
   //PyObject *out_array = (PyObject *)PyArray_FromDims(1, out_dim, NPY_COMPLEX128);
   PyObject *out_array = (PyObject *)PyArray_SimpleNew(1, out_dim, NPY_COMPLEX128);
-  memcpy(PyArray_DATA(out_array), my_plan.f_hat, number_of_fourier_points*sizeof(fftw_complex));
+  //memcpy(PyArray_DATA(out_array), my_plan.f_hat, number_of_fourier_points*sizeof(fftw_complex));
+
+  /* We are doing an inverse transform to get the nonequispaced to equispaced. Therefore
+     we have to conjugate the output since we are actually wanting a forward transform. */
+  double *out_array_data = (double *) PyArray_DATA(out_array);
+  /* double *f_hat_as_double = (double *) my_plan.f_hat; */
+  double *f_hat_as_double = (double *) my_plan.f;
+  int output_size = ((int)PyArray_SIZE(out_array));
+  for (int i = 0; i < output_size; i++) {
+    out_array_data[2*i] = f_hat_as_double[2*i];
+    out_array_data[2*i+1] = -f_hat_as_double[2*i+1];
+    //printf("%g, %g\n", out_array_data[2*i], out_array_data[2*i+1]);
+  }
+
+  
 
   Py_XDECREF(real_coord_array);
   Py_XDECREF(real_values_array);
@@ -602,45 +645,44 @@ static PyObject *nnfft(PyObject *self, PyObject *args, PyObject *kwargs)
 }
 
 static PyTypeObject TransformerType = {
-   PyObject_HEAD_INIT(NULL)
-   0,                         /* ob_size */
-   "Transformer",         /* tp_name */
-   sizeof(Transformer),   /* tp_basicsize */
-   0,                         /* tp_itemsize */
-   (destructor)Transformer_dealloc, /* tp_dealloc */
-   0,                         /* tp_print */
-   0,                         /* tp_getattr */
-   0,                         /* tp_setattr */
-   0,                         /* tp_compare */
-   0,                         /* tp_repr */
-   0,                         /* tp_as_number */
-   0,                         /* tp_as_sequence */
-   0,                         /* tp_as_mapping */
-   0,                         /* tp_hash */
-   0,                         /* tp_call */
-   0,                         /* tp_str */
-   0,                         /* tp_getattro */
-   0,                         /* tp_setattro */
-   0,                         /* tp_as_buffer */
-   Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags*/
-   Transformer__doc__,        /* tp_doc */
-   0,                         /* tp_traverse */
-   0,                         /* tp_clear */
-   0,                         /* tp_richcompare */
-   0,                         /* tp_weaklistoffset */
-   0,                         /* tp_iter */
-   0,                         /* tp_iternext */
-   Transformer_methods,   /* tp_methods */
-   Transformer_members,   /* tp_members */
-   0,                         /* tp_getset */
-   0,                         /* tp_base */
-   0,                         /* tp_dict */
-   0,                         /* tp_descr_get */
-   0,                         /* tp_descr_set */
-   0,                         /* tp_dictoffset */
-   (initproc)Transformer_init,  /* tp_init */
-   0,                         /* tp_alloc */
-   0,                         /* tp_new */
+  PyVarObject_HEAD_INIT(NULL, 0)
+  "nfft.Transformer",         /* tp_name */
+  sizeof(Transformer),   /* tp_basicsize */
+  0,                         /* tp_itemsize */
+  (destructor)Transformer_dealloc, /* tp_dealloc */
+  0,                         /* tp_print */
+  0,                         /* tp_getattr */
+  0,                         /* tp_setattr */
+  0,                         /* tp_reserved */
+  0,                         /* tp_repr */
+  0,                         /* tp_as_number */
+  0,                         /* tp_as_sequence */
+  0,                         /* tp_as_mapping */
+  0,                         /* tp_hash */
+  0,                         /* tp_call */
+  0,                         /* tp_str */
+  0,                         /* tp_getattro */
+  0,                         /* tp_setattro */
+  0,                         /* tp_as_buffer */
+  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+  Transformer__doc__,        /* tp_doc */
+  0,                         /* tp_traverse */
+  0,                         /* tp_clear */
+  0,                         /* tp_richcompare */
+  0,                         /* tp_weaklistoffset */
+  0,                         /* tp_iter */
+  0,                         /* tp_iternext */
+  Transformer_methods,   /* tp_methods */
+  Transformer_members,   /* tp_members */
+  0,                         /* tp_getset */
+  0,                         /* tp_base */
+  0,                         /* tp_dict */
+  0,                         /* tp_descr_get */
+  0,                         /* tp_descr_set */
+  0,                         /* tp_dictoffset */
+  (initproc)Transformer_init,  /* tp_init */
+  0,                         /* tp_alloc */
+  0,                         /* tp_new */
 };
 
 static PyMethodDef NfftMethods[] = {
@@ -651,19 +693,44 @@ static PyMethodDef NfftMethods[] = {
   {NULL, NULL, 0, NULL}
 };
 
+#ifdef IS_PY3
+static struct PyModuleDef moduledef = {
+  PyModuleDef_HEAD_INIT,
+  "nfft",      /* m_name */
+  "Nonequispaced FFT tools.", /* m_doc */
+  -1,          /* m_size */
+  NfftMethods, /* m_methods */
+  NULL,        /* m_reload */
+  NULL,        /* m_traverse */
+  NULL,        /* m_clear */
+  NULL,        /* m_free */
+};
+#endif
 
-
+#ifdef IS_PY3
+PyMODINIT_FUNC PyInit_nfft(void)
+#else
 PyMODINIT_FUNC initnfft(void)
+#endif
 {
   import_array();
-  PyObject *m = Py_InitModule3("nfft", NfftMethods, "Nonequispaced FFT tools.");
-  if (m == NULL)
-    return;
 
   TransformerType.tp_new = PyType_GenericNew;
   if (PyType_Ready(&TransformerType) < 0)
-    return;
+    return NULL;
+
+  #ifdef IS_PY3
+    PyObject *module = PyModule_Create(&moduledef);
+  #else
+    PyObject *module = Py_InitModule3("nfft", NfftMethods, "Nonequispaced FFT tools.");
+  #endif
+  if (module == NULL)
+    return NULL;
 
   Py_INCREF(&TransformerType);
-  PyModule_AddObject(m, "Transformer", (PyObject *)&TransformerType);
+  PyModule_AddObject(module, "Transformer", (PyObject *)&TransformerType);
+
+  #ifdef IS_PY3
+    return module;
+  #endif
 }
