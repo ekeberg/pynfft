@@ -173,7 +173,7 @@ static PyObject *nfft(PyObject *self, PyObject *args, PyObject *kwargs)
   }
 
   if ((PyArray_NDIM(coord_array) != 2 || PyArray_DIM(coord_array, 1) != ndim) && (ndim != 1 || PyArray_NDIM(coord_array) != 1)) {
-    PyErr_SetString(PyExc_ValueError, "Coordinates must be given as array of dimensions [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] of [NUMBER_OF_POINTS for 1D transforms.\n");
+    PyErr_SetString(PyExc_ValueError, "Coordinates must be given as array of dimensions [NUMBER_OF_POINTS, NUMBER_OF_DIMENSIONS] or [NUMBER_OF_POINTS for 1D transforms.\n");
     Py_XDECREF(coord_array);
     Py_XDECREF(in_array);
     return NULL;
@@ -694,43 +694,32 @@ static PyMethodDef NfftMethods[] = {
 };
 
 #ifdef IS_PY3
-static struct PyModuleDef moduledef = {
-  PyModuleDef_HEAD_INIT,
-  "nfft",      /* m_name */
-  "Nonequispaced FFT tools.", /* m_doc */
-  -1,          /* m_size */
-  NfftMethods, /* m_methods */
-  NULL,        /* m_reload */
-  NULL,        /* m_traverse */
-  NULL,        /* m_clear */
-  NULL,        /* m_free */
-};
+  #define MOD_ERROR_VAL NULL
+  #define MOD_SUCCESS_VAL(val) val
+  #define MOD_INIT(name) PyMODINIT_FUNC PyInit_##name(void)
+  #define MOD_DEF(ob, name, doc, methods) \
+          static struct PyModuleDef moduledef = { \
+	    PyModuleDef_HEAD_INIT, name, doc, -1, methods, }; \
+	  ob = PyModule_Create(&moduledef);
+#else
+  #define MOD_ERROR_VAL
+  #define MOD_SUCCESS_VAL(val)
+  #define MOD_INIT(name) void init##name(void)
+  #define MOD_DEF(ob, name, doc, methods) \
+          ob = Py_InitModule3(name, methods, doc);
 #endif
 
-#ifdef IS_PY3
-PyMODINIT_FUNC PyInit_nfft(void)
-#else
-PyMODINIT_FUNC initnfft(void)
-#endif
+MOD_INIT(nfft)
 {
   import_array();
-
-  TransformerType.tp_new = PyType_GenericNew;
-  if (PyType_Ready(&TransformerType) < 0)
-    return NULL;
-
-  #ifdef IS_PY3
-    PyObject *module = PyModule_Create(&moduledef);
-  #else
-    PyObject *module = Py_InitModule3("nfft", NfftMethods, "Nonequispaced FFT tools.");
-  #endif
+  PyObject *module;
+  MOD_DEF(module, "nfft", "Nonequispaced FFT tools.", NfftMethods)
   if (module == NULL)
-    return NULL;
+    return MOD_ERROR_VAL;
+  return MOD_SUCCESS_VAL(module);
 
   Py_INCREF(&TransformerType);
   PyModule_AddObject(module, "Transformer", (PyObject *)&TransformerType);
 
-  #ifdef IS_PY3
-    return module;
-  #endif
+  return MOD_SUCCESS_VAL(module);
 }

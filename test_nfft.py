@@ -119,6 +119,12 @@ class TestNfft(unittest.TestCase):
         ft_fftw = numpy.fft.fftshift(numpy.fft.fft(numpy.fft.fftshift(a)))
         numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
 
+    def test_nnfft_1d(self):
+        a = numpy.random.random(self._size)
+        ft_nfft = nfft.nnfft(self._coord_1d, a, self._coord_1d*self._size, use_direct=True)
+        ft_fftw = numpy.fft.fftshift(numpy.fft.fft(numpy.fft.fftshift(a)))
+        numpy.testing.assert_almost_equal(ft_nfft, ft_fftw, decimal=self._decimals)
+
     def test_failures(self):
         a = numpy.random.random(self._size)
         self.assertRaises(TypeError, nfft.nfft, (a, "hej"))
